@@ -1,8 +1,7 @@
-use crate::api::image::generate::Size;
 use api::{
     completion::Completion,
     edit::Edit,
-    image::generate::{Generated, ResponseFormat},
+    image::{Image, ResponseFormat, Size},
 };
 use std::path::PathBuf;
 pub mod api;
@@ -19,12 +18,11 @@ async fn main() -> anyhow::Result<()> {
     //     println!("{}: {:#?}", model.id, model.permission);
     // }
 
-    let img = Generated::builder("USA flag but it's communist")?
+    let img = Image::edit_builder("remove his mustache")?
         .n(2)
         .unwrap()
-        .response_format(ResponseFormat::B64Json)
-        .size(Size::P256)
-        .build(&api_key)
+        .size(Size::P512)
+        .with_file("img/primeagen.jpg", None, &api_key)
         .await?;
 
     img.save_at(PathBuf::default()).await?;

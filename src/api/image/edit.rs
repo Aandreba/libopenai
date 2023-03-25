@@ -137,8 +137,7 @@ impl Builder {
     ) -> Result<Image> {
         let client = Client::new();
 
-        let mut body = Form::new().text("prompt", self.prompt);
-        body = body.part("image", image);
+        let mut body = Form::new().text("prompt", self.prompt).part("image", image);
 
         if let Some(mask) = mask {
             body = body.part("mask", mask)
