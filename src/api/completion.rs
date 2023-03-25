@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use futures::{future::ready, ready, Stream, TryStreamExt};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ops::RangeInclusive, pin::Pin};
+use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive, pin::Pin};
 
 type InnerStream = dyn Stream<Item = reqwest::Result<bytes::Bytes>>;
 
@@ -32,13 +32,19 @@ pub struct CompletionStream {
 #[derive(Debug, Clone, Serialize)]
 pub struct Builder<'a> {
     model: Str<'a>,
-    prompt: Option<Slice<'a, String>>,
+    prompt: Option<Vec<Str<'a>>>,
     suffix: Option<Str<'a>>,
     max_tokens: Option<u32>,
     temperature: Option<f64>,
     top_p: Option<f64>,
     n: Option<u32>,
     stream: bool,
+    logprobs: Option<u32>,
+    echo: Option<bool>,
+    presence_penalty: Option<f64>,
+    best_of: Option<u32>,
+    logit_bias: Option<HashMap<Str<'a>, f64>>,
+    user: Option<Str<'a>>,
 }
 
 impl Completion {
@@ -92,15 +98,20 @@ impl<'a> Builder<'a> {
             top_p: None,
             n: None,
             stream: false,
+            logprobs: None,
+            echo: None,
+            presence_penalty: None,
+            best_of: None,
+            logit_bias: None,
+            user: None,
         };
     }
 
-    pub fn set_prompt(self, prompt: impl Into<String>) -> Self {
-        self.set_prompts(vec![prompt.into()])
-    }
-
-    pub fn set_prompts(mut self, prompt: impl Into<Slice<'a, String>>) -> Self {
-        self.prompt = Some(prompt.into());
+    pub fn set_prompts<I: IntoIterator>(mut self, prompt: I) -> Self
+    where
+        I::Item: Into<Str<'a>>,
+    {
+        self.prompt = Some(prompt.into_iter().map(Into::into).collect());
         self
     }
 
@@ -150,6 +161,48 @@ impl<'a> Builder<'a> {
 
     pub fn n(mut self, n: u32) -> Self {
         self.n = Some(n);
+        self
+    }
+
+    pub fn logprobs(mut self, logprobs: u32) -> Self {
+        self.logprobs = Some(logprobs);
+        self
+    }
+
+    pub fn echo(mut self, echo: bool) -> Self {
+        self.echo = Some(echo);
+        self
+    }
+
+    /* TODO stop */
+
+    pub fn presence_penalty(mut self, presence_penalty: f64) -> Result<Self, Self> {
+        const RANGE: RangeInclusive<f64> = -2f64..=2f64;
+        return match RANGE.contains(&presence_penalty) {
+            true => {
+                self.presence_penalty = Some(presence_penalty);
+                Ok(self)
+            }
+            false => Err(self),
+        };
+    }
+
+    pub fn best_of(mut self, best_of: u32) -> Self {
+        self.best_of = Some(best_of);
+        self
+    }
+
+    pub fn logit_bias<K, I>(mut self, logit_bias: I) -> Self
+    where
+        K: Into<Str<'a>>,
+        I: IntoIterator<Item = (K, f64)>,
+    {
+        self.logit_bias = Some(logit_bias.into_iter().map(|(k, v)| (k.into(), v)).collect());
+        self
+    }
+
+    pub fn user(mut self, user: impl Into<Str<'a>>) -> Self {
+        self.user = Some(user.into());
         self
     }
 

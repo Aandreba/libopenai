@@ -1,5 +1,6 @@
 use crate::api::{
-    audio::{transcription::Transcription, translation::Translation},
+    audio::transcription::Transcription,
+    image::{self, Images},
     moderations::Moderation,
 };
 use api::{completion::Completion, edit::Edit};
@@ -9,13 +10,8 @@ pub mod api;
 async fn main() -> anyhow::Result<()> {
     let api_key = dotenv::var("API_KEY")?;
 
-    let text = Transcription::new()
-        .with_file("media/audio.mp3", &api_key)
-        .await?;
-
-    let moderation = Moderation::new(&text, None, &api_key).await?;
-
-    println!("{moderation:#?}");
+    let similar = Images::variation();
+    //println!("{moderation:#?}");
     return Ok(());
 }
 

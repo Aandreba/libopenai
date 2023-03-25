@@ -176,3 +176,8 @@ impl Data {
         return Ok(());
     }
 }
+
+pub async fn load_image(path: impl AsRef<Path>) {
+    let path: &Path = path.as_ref();
+    todo!()
+}
