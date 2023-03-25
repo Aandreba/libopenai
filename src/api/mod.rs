@@ -1,29 +1,33 @@
-use reqwest::Client;
-use serde::Deserialize;
+use std::borrow::Cow;
 
-#[derive(Debug, Clone, Deserialize)]
-#[non_exhaustive]
-pub struct Model {
-    pub id: String,
-    pub object: String,
-    pub owned_by: String,
-    pub permision: Vec<serde_json::Value>,
+pub type Str<'a> = Cow<'a, str>;
+pub type Slice<'a, T> = Cow<'a, [T]>;
+
+pub mod completion;
+pub mod error;
+pub mod model;
+
+#[inline]
+pub(super) fn trim_ascii(ascii: &[u8]) -> &[u8] {
+    return trim_ascii_end(trim_ascii_start(ascii));
 }
 
-pub async fn models(api_key: &str) -> anyhow::Result<Vec<Model>> {
-    #[derive(Debug, Clone, Deserialize)]
-    pub struct Models {
-        data: Vec<Model>,
+pub(super) fn trim_ascii_start(mut ascii: &[u8]) -> &[u8] {
+    loop {
+        match ascii.first() {
+            Some(&x) if x.is_ascii_whitespace() => ascii = &ascii[1..],
+            _ => break,
+        }
     }
+    return ascii;
+}
 
-    let client = Client::new();
-    let models = client
-        .get("https://api.openai.com/v1/models")
-        .bearer_auth(api_key)
-        .send()
-        .await?
-        .json::<Models>()
-        .await?;
-
-    return Ok(models.data);
+pub(super) fn trim_ascii_end(mut ascii: &[u8]) -> &[u8] {
+    loop {
+        match ascii.last() {
+            Some(&x) if x.is_ascii_whitespace() => ascii = &ascii[..ascii.len() - 1],
+            _ => break,
+        }
+    }
+    return ascii;
 }
