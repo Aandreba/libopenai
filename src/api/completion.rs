@@ -1,7 +1,11 @@
-use super::{error::Result, Slice, Str};
+use super::{
+    common::{Choice, Usage},
+    error::Result,
+    Slice, Str,
+};
 use crate::api::{error::FallibleResponse, trim_ascii_start};
 use chrono::{DateTime, Utc};
-use futures::{future::ready, ready, Stream, StreamExt, TryStreamExt};
+use futures::{future::ready, ready, Stream, TryStreamExt};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ops::RangeInclusive, pin::Pin};
@@ -19,23 +23,6 @@ pub struct Completion {
     pub choices: Vec<Choice>,
     #[serde(default)]
     pub usage: Option<Usage>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[non_exhaustive]
-pub struct Choice {
-    pub text: String,
-    pub index: u32,
-    pub lobprogs: Option<Vec<serde_json::Value>>,
-    pub finish_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[non_exhaustive]
-pub struct Usage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
-    pub total_tokens: u32,
 }
 
 pub struct CompletionStream {
@@ -56,25 +43,41 @@ pub struct Builder<'a> {
 
 impl Completion {
     #[inline]
-    pub async fn new(model: &str, prompt: impl Into<String>, api_key: &str) -> Result<Self> {
-        return Self::builder(model)
-            .set_prompt([prompt.into()].as_slice())
-            .build(api_key)
+    pub async fn create(
+        model: impl AsRef<str>,
+        prompt: impl Into<String>,
+        api_key: impl AsRef<str>,
+    ) -> Result<Self> {
+        return Self::builder(model.as_ref())
+            .set_prompts([prompt.into()].as_slice())
+            .build(api_key.as_ref())
             .await;
     }
 
     #[inline]
-    pub async fn new_stream(
-        model: &str,
+    pub async fn create_stream(
+        model: impl AsRef<str>,
         prompt: impl Into<String>,
-        api_key: &str,
+        api_key: impl AsRef<str>,
     ) -> Result<CompletionStream> {
-        return CompletionStream::new(model, prompt, api_key).await;
+        return CompletionStream::create(model, prompt, api_key).await;
     }
 
     #[inline]
     pub fn builder<'a>(model: impl Into<Str<'a>>) -> Builder<'a> {
         return Builder::new(model);
+    }
+}
+
+impl Completion {
+    #[inline]
+    pub fn first(&self) -> Option<&str> {
+        return Some(&self.choices.first()?.text);
+    }
+
+    #[inline]
+    pub fn into_first(self) -> Option<String> {
+        return Some(self.choices.into_iter().next()?.text);
     }
 }
 
@@ -92,12 +95,16 @@ impl<'a> Builder<'a> {
         };
     }
 
-    pub fn set_prompt(mut self, prompt: impl Into<Slice<'a, String>>) -> Self {
+    pub fn set_prompt(self, prompt: impl Into<String>) -> Self {
+        self.set_prompts(vec![prompt.into()])
+    }
+
+    pub fn set_prompts(mut self, prompt: impl Into<Slice<'a, String>>) -> Self {
         self.prompt = Some(prompt.into());
         self
     }
 
-    pub fn append_prompt(mut self, prompt: impl Into<Cow<'a, [String]>>) -> Self {
+    pub fn append_prompts(mut self, prompt: impl Into<Cow<'a, [String]>>) -> Self {
         let mut prompt: Cow<'a, [String]> = prompt.into();
         match self.prompt {
             Some(ref mut prev) => {
@@ -122,6 +129,9 @@ impl<'a> Builder<'a> {
         self
     }
 
+    /// What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
+    ///
+    /// We generally recommend altering this or `top_p` but not both.
     pub fn temperature(mut self, temperature: f64) -> Result<Self, Self> {
         const RANGE: RangeInclusive<f64> = 0f64..=2f64;
         return match RANGE.contains(&temperature) {
@@ -168,25 +178,25 @@ impl<'a> Builder<'a> {
             .send()
             .await?;
 
-        return Ok(CompletionStream::create(resp));
+        return Ok(CompletionStream::new(resp));
     }
 }
 
 impl CompletionStream {
     #[inline]
-    pub async fn new(
-        model: &str,
+    pub async fn create(
+        model: impl AsRef<str>,
         prompt: impl Into<String>,
-        api_key: &str,
+        api_key: impl AsRef<str>,
     ) -> Result<CompletionStream> {
-        return Completion::builder(model)
-            .set_prompt([prompt.into()].as_slice())
-            .build_stream(api_key)
+        return Completion::builder(model.as_ref())
+            .set_prompts([prompt.into()].as_slice())
+            .build_stream(api_key.as_ref())
             .await;
     }
 
     #[inline]
-    fn create(resp: Response) -> Self {
+    fn new(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
         };
@@ -196,7 +206,7 @@ impl CompletionStream {
 impl CompletionStream {
     pub fn into_text_stream(self) -> impl Stream<Item = Result<String>> {
         return self
-            .try_filter_map(|mut x| ready(Ok(x.choices.drain(0..=0).next())))
+            .try_filter_map(|x| ready(Ok(x.choices.into_iter().next())))
             .map_ok(|x| x.text);
     }
 }

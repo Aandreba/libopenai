@@ -3,15 +3,20 @@ use std::borrow::Cow;
 pub type Str<'a> = Cow<'a, str>;
 pub type Slice<'a, T> = Cow<'a, [T]>;
 
+pub mod common;
 pub mod completion;
+pub mod edit;
 pub mod error;
+pub mod image;
 pub mod model;
 
 #[inline]
+#[allow(unused)]
 pub(super) fn trim_ascii(ascii: &[u8]) -> &[u8] {
     return trim_ascii_end(trim_ascii_start(ascii));
 }
 
+#[allow(unused)]
 pub(super) fn trim_ascii_start(mut ascii: &[u8]) -> &[u8] {
     loop {
         match ascii.first() {
@@ -22,6 +27,7 @@ pub(super) fn trim_ascii_start(mut ascii: &[u8]) -> &[u8] {
     return ascii;
 }
 
+#[allow(unused)]
 pub(super) fn trim_ascii_end(mut ascii: &[u8]) -> &[u8] {
     loop {
         match ascii.last() {
