@@ -1,8 +1,8 @@
 use super::{Images, ResponseFormat, Size};
 use crate::api::error::{Error, FallibleResponse, Result};
 use bytes::Bytes;
-use futures::{future::try_join, TryStream};
-use rand::{distributions::Standard, thread_rng, Rng};
+use futures::TryStream;
+use rand::random;
 use reqwest::{
     multipart::{Form, Part},
     Body, Client,
@@ -12,7 +12,6 @@ use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
 pub struct Builder {
-    prompt: String,
     n: Option<u32>,
     size: Option<Size>,
     response_format: Option<ResponseFormat>,
@@ -21,26 +20,20 @@ pub struct Builder {
 
 impl Images {
     #[inline]
-    pub fn edit(prompt: impl Into<String>) -> Result<Builder> {
-        return Builder::new(prompt);
+    pub fn variation() -> Builder {
+        return Builder::new();
     }
 }
 
 impl Builder {
     #[inline]
-    pub fn new(prompt: impl Into<String>) -> Result<Self> {
-        let prompt: String = prompt.into();
-        if prompt.len() > 1000 {
-            return Err(Error::msg("Message excedes character limit of 1000"));
-        }
-
-        return Ok(Self {
-            prompt: prompt.into(),
+    pub fn new() -> Self {
+        return Self {
             n: None,
             size: None,
             response_format: None,
             user: None,
-        });
+        };
     }
 
     #[inline]
@@ -76,42 +69,18 @@ impl Builder {
     pub async fn with_file(
         self,
         image: impl AsRef<Path>,
-        mask: Option<&Path>,
         api_key: impl AsRef<str>,
     ) -> Result<Images> {
-        let mut rng = thread_rng();
-        let (image, mask) = match mask {
-            Some(mask) => {
-                let image = image.as_ref();
-                let image_name = match image.file_name().map(OsStr::to_string_lossy) {
-                    Some(x) => x.into_owned(),
-                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
-                };
-                let mask_name = match mask.file_name().map(OsStr::to_string_lossy) {
-                    Some(x) => x.into_owned(),
-                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
-                };
-
-                let (image, mask) =
-                    try_join(tokio::fs::File::open(image), tokio::fs::File::open(mask)).await?;
-                (
-                    Part::stream(Body::from(image)).file_name(image_name),
-                    Some(Part::stream(Body::from(mask)).file_name(mask_name)),
-                )
-            }
-            None => {
-                let image = image.as_ref();
-                let name = match image.file_name().map(OsStr::to_string_lossy) {
-                    Some(x) => x.into_owned(),
-                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
-                };
-
-                let image = Body::from(tokio::fs::File::open(image).await?);
-                (Part::stream(Body::from(image)).file_name(name), None)
-            }
+        let image = image.as_ref();
+        let name = match image.file_name().map(OsStr::to_string_lossy) {
+            Some(x) => x.into_owned(),
+            None => format!("{}.png", random::<u64>()),
         };
 
-        return self.with_part(image, mask, api_key).await;
+        let image = Body::from(tokio::fs::File::open(image).await?);
+        let image = Part::stream(Body::from(image)).file_name(name);
+
+        return self.with_part(image, api_key).await;
     }
 
     pub async fn with_tokio_reader<I>(self, image: I, api_key: impl AsRef<str>) -> Result<Images>
@@ -127,43 +96,27 @@ impl Builder {
         I::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
         Bytes: From<I::Ok>,
     {
-        return self
-            .with_body(Body::wrap_stream(image), None, api_key)
-            .await;
+        return self.with_body(Body::wrap_stream(image), api_key).await;
     }
 
     pub async fn with_body(
         self,
         image: impl Into<Body>,
-        mask: Option<Body>,
         api_key: impl AsRef<str>,
     ) -> Result<Images> {
-        let mut rng = thread_rng();
-
         return self
             .with_part(
-                Part::stream(image).file_name(format!("{}.png", rng.sample::<u64, _>(Standard))),
-                mask.map(|mask| {
-                    Part::stream(mask).file_name(format!("{}.png", rng.sample::<u64, _>(Standard)))
-                }),
+                Part::stream(image).file_name(format!("{}.png", random::<u64>())),
                 api_key,
             )
             .await;
     }
 
-    pub async fn with_part(
-        self,
-        image: Part,
-        mask: Option<Part>,
-        api_key: impl AsRef<str>,
-    ) -> Result<Images> {
+    pub async fn with_part(self, image: Part, api_key: impl AsRef<str>) -> Result<Images> {
         let client = Client::new();
 
-        let mut body = Form::new().text("prompt", self.prompt).part("image", image);
+        let mut body = Form::new().part("image", image);
 
-        if let Some(mask) = mask {
-            body = body.part("mask", mask)
-        }
         if let Some(n) = self.n {
             body = body.text("n", format!("{n}"))
         }
@@ -190,7 +143,7 @@ impl Builder {
         }
 
         let resp = client
-            .post("https://api.openai.com/v1/images/edits")
+            .post("https://api.openai.com/v1/images/variations")
             .bearer_auth(api_key.as_ref())
             .multipart(body)
             .send()

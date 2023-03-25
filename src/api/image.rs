@@ -1,7 +1,6 @@
 use super::{
     common::StreamTokioAsyncRead,
     error::{Error, Result},
-    Str,
 };
 use base64::Engine;
 use bytes::Bytes;
@@ -21,9 +20,10 @@ use tokio::task::spawn_blocking;
 
 pub mod edit;
 pub mod generate;
+pub mod variation;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Image {
+pub struct Images {
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created: DateTime<Utc>,
     pub data: Vec<Data>,
@@ -57,7 +57,7 @@ pub enum Data {
     B64Json(Arc<str>),
 }
 
-impl Image {
+impl Images {
     pub async fn save_at(self, path: impl AsRef<Path>) -> Result<()> {
         let mut rng = thread_rng();
         let path: &Path = path.as_ref();

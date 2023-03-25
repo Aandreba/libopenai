@@ -1,4 +1,4 @@
-use super::{Image, ResponseFormat, Size};
+use super::{Images, ResponseFormat, Size};
 use crate::api::{
     error::{Error, FallibleResponse, Result},
     Str,
@@ -20,16 +20,16 @@ pub struct Builder<'a> {
     user: Option<Str<'a>>,
 }
 
-impl Image {
+impl Images {
     #[inline]
-    pub async fn generate(prompt: impl AsRef<str>, api_key: impl AsRef<str>) -> Result<Self> {
-        return Self::generate_builder(prompt.as_ref())?
+    pub async fn new(prompt: impl AsRef<str>, api_key: impl AsRef<str>) -> Result<Self> {
+        return Self::generate(prompt.as_ref())?
             .build(api_key.as_ref())
             .await;
     }
 
     #[inline]
-    pub fn generate_builder<'a>(prompt: impl Into<Str<'a>>) -> Result<Builder<'a>> {
+    pub fn generate<'a>(prompt: impl Into<Str<'a>>) -> Result<Builder<'a>> {
         return Builder::new(prompt);
     }
 }
@@ -81,7 +81,7 @@ impl<'a> Builder<'a> {
         self
     }
 
-    pub async fn build(self, api_key: &str) -> Result<Image> {
+    pub async fn build(self, api_key: &str) -> Result<Images> {
         let client = Client::new();
         let resp = client
             .post("https://api.openai.com/v1/images/generations")
@@ -89,7 +89,7 @@ impl<'a> Builder<'a> {
             .json(&self)
             .send()
             .await?
-            .json::<FallibleResponse<Image>>()
+            .json::<FallibleResponse<Images>>()
             .await?
             .into_result()?;
 

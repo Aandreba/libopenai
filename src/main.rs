@@ -1,31 +1,21 @@
-use api::{
-    completion::Completion,
-    edit::Edit,
-    image::{Image, ResponseFormat, Size},
+use crate::api::{
+    audio::{transcription::Transcription, translation::Translation},
+    moderations::Moderation,
 };
-use std::path::PathBuf;
+use api::{completion::Completion, edit::Edit};
 pub mod api;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let api_key = dotenv::var("API_KEY")?;
-    // let api_key = dotenv::var("API_KEY")?;
-    // let models = models(&api_key).await?;
-    // for model in models {
-    //     if !model.id.contains("edit") {
-    //         continue;
-    //     }
-    //     println!("{}: {:#?}", model.id, model.permission);
-    // }
 
-    let img = Image::edit_builder("remove his mustache")?
-        .n(2)
-        .unwrap()
-        .size(Size::P512)
-        .with_file("img/primeagen.jpg", None, &api_key)
+    let text = Transcription::new()
+        .with_file("media/audio.mp3", &api_key)
         .await?;
 
-    img.save_at(PathBuf::default()).await?;
+    let moderation = Moderation::new(&text, None, &api_key).await?;
+
+    println!("{moderation:#?}");
     return Ok(());
 }
 

@@ -3,12 +3,14 @@ use std::borrow::Cow;
 pub type Str<'a> = Cow<'a, str>;
 pub type Slice<'a, T> = Cow<'a, [T]>;
 
+pub mod audio;
 pub mod common;
 pub mod completion;
 pub mod edit;
 pub mod error;
 pub mod image;
 pub mod model;
+pub mod moderations;
 
 #[inline]
 #[allow(unused)]
