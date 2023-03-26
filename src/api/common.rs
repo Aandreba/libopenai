@@ -4,17 +4,6 @@ use std::{collections::VecDeque, task::Poll};
 
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
-pub struct Choice {
-    pub text: String,
-    pub index: u32,
-    #[serde(default)]
-    pub lobprogs: Option<Vec<serde_json::Value>>,
-    #[serde(default)]
-    pub finish_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[non_exhaustive]
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,

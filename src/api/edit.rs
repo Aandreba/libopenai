@@ -1,5 +1,6 @@
 use super::{
-    common::{Choice, Usage},
+    common::Usage,
+    completion::Choice,
     error::{BuilderError, Result},
     Str,
 };
