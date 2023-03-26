@@ -15,6 +15,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Base64 error: {0}")]
     Base64(#[from] base64::DecodeError),
+    #[error("Image error: {0}")]
+    Image(#[from] image::error::ImageError),
     #[error("Unknown error: {0}")]
     Other(#[from] anyhow::Error),
 }

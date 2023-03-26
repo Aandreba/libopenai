@@ -1,13 +1,24 @@
 use super::{Images, ResponseFormat, Size};
 use crate::api::error::{Error, FallibleResponse, Result};
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures::TryStream;
+use image::codecs::png::PngDecoder;
+use image::io::Reader as ImageReader;
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageOutputFormat};
 use rand::random;
 use reqwest::{
     multipart::{Form, Part},
     Body, Client,
 };
-use std::{ffi::OsStr, ops::RangeInclusive, path::Path};
+use std::io::Cursor;
+use std::mem::MaybeUninit;
+use std::path::PathBuf;
+use std::{
+    ffi::OsStr,
+    io::{Read, Seek, SeekFrom},
+    ops::RangeInclusive,
+};
+use tokio::task::spawn_blocking;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
@@ -68,18 +79,74 @@ impl Builder {
 
     pub async fn with_file(
         self,
-        image: impl AsRef<Path>,
+        image: impl Into<PathBuf>,
         api_key: impl AsRef<str>,
     ) -> Result<Images> {
-        let image = image.as_ref();
-        let name = match image.file_name().map(OsStr::to_string_lossy) {
+        let image_path: PathBuf = image.into();
+        let my_image_path = image_path.clone();
+
+        let image = spawn_blocking(move || {
+            let mut image = std::fs::File::open(my_image_path)?;
+
+            // Read file magic number and seek back to start
+            let mut magic = [0; 8];
+            image.read_exact(&mut magic)?;
+            image.seek(SeekFrom::Start(0))?;
+
+            return match image::guess_format(&magic) {
+                Ok(ImageFormat::Png) => {
+                    let decoder = PngDecoder::new(&mut image)?;
+                    match decoder.color_type() {
+                        image::ColorType::Rgba8
+                        | image::ColorType::Rgba16
+                        | image::ColorType::Rgba32F => {
+                            Ok(Body::from(tokio::fs::File::from_std(image)))
+                        }
+                        _ => {
+                            let len = match usize::try_from(decoder.total_bytes()) {
+                                Ok(len) => len,
+                                Err(e) => return Err(Error::Other(anyhow::Error::new(e))),
+                            };
+
+                            let mut bytes = vec![0; len];
+                            decoder.read_image(&mut bytes)?;
+                            Ok(Body::from(Bytes::from(bytes)))
+                        }
+                    }
+                }
+                _ => {
+                    let mut output = Vec::new();
+                    match ImageReader::new(std::io::BufReader::new(image))
+                        .with_guessed_format()?
+                        .decode()?
+                    {
+                        DynamicImage::ImageRgba8(x) => {
+                            x.write_to(&mut Cursor::new(&mut output), ImageOutputFormat::Png)
+                        }
+                        DynamicImage::ImageRgba16(x) => {
+                            x.write_to(&mut Cursor::new(&mut output), ImageOutputFormat::Png)
+                        }
+                        DynamicImage::ImageRgba32F(x) => {
+                            x.write_to(&mut Cursor::new(&mut output), ImageOutputFormat::Png)
+                        }
+                        x => x
+                            .to_rgba8()
+                            .write_to(&mut Cursor::new(&mut output), ImageOutputFormat::Png),
+                    }?;
+
+                    Result::<Body>::Ok(Body::from(output))
+                }
+            };
+        })
+        .await
+        .unwrap()?;
+
+        let name = match image_path.file_name().map(OsStr::to_string_lossy) {
             Some(x) => x.into_owned(),
             None => format!("{}.png", random::<u64>()),
         };
 
-        let image = Body::from(tokio::fs::File::open(image).await?);
-        let image = Part::stream(Body::from(image)).file_name(name);
-
+        let image = Part::stream(image).file_name(name);
         return self.with_part(image, api_key).await;
     }
 

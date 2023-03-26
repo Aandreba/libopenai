@@ -10,8 +10,14 @@ pub mod api;
 async fn main() -> anyhow::Result<()> {
     let api_key = dotenv::var("API_KEY")?;
 
-    let similar = Images::variation();
-    //println!("{moderation:#?}");
+    let similar = Images::variation()
+        .n(2)
+        .unwrap()
+        .size(image::Size::P512)
+        .with_file("media/me.png", &api_key)
+        .await?;
+
+    println!("{similar:#?}");
     return Ok(());
 }
 
