@@ -7,10 +7,12 @@ pub mod chat;
 pub mod common;
 pub mod completion;
 pub mod error;
+pub mod finetune;
 pub mod image;
 pub mod model;
 pub mod moderations;
 // pub mod edit;
+pub mod file;
 
 pub mod prelude {
     use super::*;
