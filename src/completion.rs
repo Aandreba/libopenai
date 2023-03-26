@@ -5,11 +5,11 @@ use super::{
 };
 use crate::{
     error::{Error, FallibleResponse, OpenAiError},
-    trim_ascii_start,
+    trim_ascii_start, Client,
 };
 use chrono::{DateTime, Utc};
 use futures::{future::ready, ready, Stream, TryStreamExt};
-use reqwest::{Client, Response};
+use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive, pin::Pin};
 
@@ -84,11 +84,11 @@ impl Completion {
     pub async fn create(
         model: impl AsRef<str>,
         prompt: impl Into<String>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Self> {
         return Self::builder(model.as_ref())
             .prompt([prompt.into()].as_slice())
-            .build(api_key.as_ref())
+            .build(client)
             .await;
     }
 
@@ -312,11 +312,10 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the request
-    pub async fn build(self, api_key: &str) -> Result<Completion> {
-        let client = Client::new();
+    pub async fn build(self, client: impl AsRef<Client>) -> Result<Completion> {
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/completions")
-            .bearer_auth(api_key)
             .json(&self)
             .send()
             .await?
@@ -328,12 +327,11 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the request as a stream request
-    pub async fn build_stream(mut self, api_key: &str) -> Result<CompletionStream> {
+    pub async fn build_stream(mut self, client: impl AsRef<Client>) -> Result<CompletionStream> {
         self.stream = true;
-        let client = Client::new();
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/completions")
-            .bearer_auth(api_key)
             .json(&self)
             .send()
             .await?;
@@ -348,11 +346,11 @@ impl CompletionStream {
     pub async fn create(
         model: impl AsRef<str>,
         prompt: impl Into<String>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<CompletionStream> {
         return Completion::builder(model.as_ref())
             .prompt([prompt.into()].as_slice())
-            .build_stream(api_key.as_ref())
+            .build_stream(client)
             .await;
     }
 

@@ -6,7 +6,6 @@ use super::{
 };
 use crate::error::FallibleResponse;
 use chrono::{DateTime, Utc};
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ops::RangeInclusive};
 

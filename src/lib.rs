@@ -1,4 +1,10 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    ops::{Deref, DerefMut},
+};
+
+use error::{Error, Result};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
 
 pub(crate) type Str<'a> = Cow<'a, str>;
 
@@ -39,6 +45,51 @@ pub mod prelude {
     pub use model::Model;
 
     pub use moderations::Moderation;
+}
+
+#[derive(Debug, Clone)]
+pub struct Client(reqwest::Client);
+
+impl Client {
+    #[inline]
+    pub fn new(api_key: impl AsRef<str>) -> Result<Self> {
+        Self::from_builder(Default::default(), api_key)
+    }
+
+    pub fn from_builder(builder: reqwest::ClientBuilder, api_key: impl AsRef<str>) -> Result<Self> {
+        let mut bearer = HeaderValue::try_from(format!("Bearer {}", api_key.as_ref()))
+            .map_err(|e| Error::Other(e.into()))?;
+        bearer.set_sensitive(true);
+
+        let mut headers = HeaderMap::new();
+        headers.append(AUTHORIZATION, bearer);
+
+        let client = builder.default_headers(headers).build()?;
+        return Ok(Self(client));
+    }
+}
+
+impl AsRef<Client> for Client {
+    #[inline]
+    fn as_ref(&self) -> &Client {
+        self
+    }
+}
+
+impl Deref for Client {
+    type Target = reqwest::Client;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Client {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 #[inline]

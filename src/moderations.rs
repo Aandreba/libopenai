@@ -1,6 +1,5 @@
 use super::error::Result;
-use crate::error::FallibleResponse;
-use reqwest::Client;
+use crate::{error::FallibleResponse, Client};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -36,12 +35,11 @@ impl Moderation {
     pub async fn new(
         input: impl AsRef<str>,
         model: Option<&str>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Self> {
-        let client = Client::new();
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/moderations")
-            .bearer_auth(api_key.as_ref())
             .json(&serde_json::json! {{
                 "input": input.as_ref(),
                 "model": model
