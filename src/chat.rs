@@ -11,7 +11,10 @@ use chrono::{DateTime, Utc};
 use futures::{ready, Stream, TryStreamExt};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, future::ready, ops::RangeInclusive, pin::Pin};
+use std::{
+    borrow::Cow, collections::HashMap, future::ready, hint::unreachable_unchecked,
+    ops::RangeInclusive, pin::Pin,
+};
 
 /// Message role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -325,6 +328,7 @@ impl<'a> Builder<'a> {
 }
 
 impl CompletionStream {
+    /// Creates a new edit for the provided input, instruction, and parameters.
     #[inline]
     pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
@@ -345,10 +349,18 @@ impl CompletionStream {
 }
 
 impl CompletionStream {
+    /// Converts [`Stream<Item = Result<Completion>>`] into [`Stream<Item = Result<Message<'static>>>`]
     pub fn into_message_stream(self) -> impl Stream<Item = Result<Message<'static>>> {
         return self
             .try_filter_map(|x| ready(Ok(x.choices.into_iter().next())))
             .map_ok(|x| x.message);
+    }
+
+    /// Converts [`Stream<Item = Result<Completion>>`] into [`Stream<Item = Result<Cow<'static, str>>>`]
+    pub fn into_text_stream(self) -> impl Stream<Item = Result<Str<'static>>> {
+        return self
+            .try_filter_map(|x| ready(Ok(x.choices.into_iter().next())))
+            .map_ok(|x| x.message.content);
     }
 }
 
