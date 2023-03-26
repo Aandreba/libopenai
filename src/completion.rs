@@ -24,6 +24,7 @@ pub struct Choice {
     pub finish_reason: Option<String>,
 }
 
+/// Given a prompt, the model will return one or more predicted completions, and can also return the probabilities of alternative tokens at each position.
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Completion {
@@ -74,6 +75,7 @@ pub struct Builder<'a> {
 }
 
 impl Completion {
+    /// Creates a completion for the provided prompt and parameters
     #[inline]
     pub async fn create(
         model: impl AsRef<str>,
@@ -86,6 +88,7 @@ impl Completion {
             .await;
     }
 
+    /// Creates a completion for the provided prompt and parameters
     #[inline]
     pub async fn create_stream(
         model: impl AsRef<str>,
@@ -95,6 +98,7 @@ impl Completion {
         return CompletionStream::create(model, prompt, api_key).await;
     }
 
+    /// Creates a completion request builder
     #[inline]
     pub fn builder<'a>(model: impl Into<Str<'a>>) -> Builder<'a> {
         return Builder::new(model);
@@ -102,18 +106,21 @@ impl Completion {
 }
 
 impl Completion {
+    /// Returns a reference to the completion's first choice
     #[inline]
-    pub fn first(&self) -> Option<&str> {
-        return Some(&self.choices.first()?.text);
+    pub fn first(&self) -> Option<&Choice> {
+        return self.choices.first();
     }
 
+    /// Returns the completion's first choice
     #[inline]
-    pub fn into_first(self) -> Option<String> {
-        return Some(self.choices.into_iter().next()?.text);
+    pub fn into_first(self) -> Option<Choice> {
+        return self.choices.into_iter().next();
     }
 }
 
 impl<'a> Builder<'a> {
+    /// Creates a new completion builder
     pub fn new(model: impl Into<Cow<'a, str>>) -> Self {
         return Self {
             model: model.into(),
@@ -134,6 +141,9 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// The prompt(s) to generate completions for, encoded as a string, array of strings, array of tokens, or array of token arrays.
+    ///
+    /// Note that <|endoftext|> is the document separator that the model sees during training, so if a prompt is not specified the model will generate as if from the beginning of a new document.
     pub fn prompt<I: IntoIterator>(mut self, prompt: I) -> Self
     where
         I::Item: Into<Str<'a>>,
@@ -142,11 +152,15 @@ impl<'a> Builder<'a> {
         self
     }
 
+    /// The suffix that comes after a completion of inserted text.
     pub fn suffix(mut self, suffix: impl Into<Str<'a>>) -> Self {
         self.suffix = Some(suffix.into());
         self
     }
 
+    /// The maximum number of tokens to generate in the completion.
+    ///
+    /// The token count of your prompt plus `max_tokens` cannot exceed the model's context length. Most models have a context length of 2048 tokens (except for the newest models, which support 4096).
     pub fn max_tokens(mut self, max_tokens: u32) -> Self {
         self.max_tokens = Some(max_tokens);
         self
@@ -169,21 +183,40 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+    ///
+    /// We generally recommend altering this or temperature but not both.
     pub fn top_p(mut self, top_p: f64) -> Self {
         self.top_p = Some(top_p);
         self
     }
 
+    /// How many completions to generate for each prompt.
+    ///
+    /// > **Note**: Because this parameter generates many completions, it can quickly consume your token quota. Use carefully and ensure that you have reasonable settings for `max_tokens` and `stop`.
     pub fn n(mut self, n: u32) -> Self {
         self.n = Some(n);
         self
     }
 
-    pub fn logprobs(mut self, logprobs: u32) -> Self {
-        self.logprobs = Some(logprobs);
-        self
+    /// Include the log probabilities on the logprobs most likely tokens, as well the chosen tokens. For example, if logprobs is 5, the API will return a list of the 5 most likely tokens. The API will always return the logprob of the sampled token, so there may be up to logprobs+1 elements in the response.
+    ///
+    /// The maximum value for logprobs is 5.
+    pub fn logprobs(mut self, logprobs: u32) -> Result<Self, BuilderError<Self>> {
+        const MAX: u32 = 5;
+        match logprobs > MAX {
+            true => Err(BuilderError::msg(
+                self,
+                format!("Exceeded maximum value of '{MAX}'"),
+            )),
+            false => {
+                self.logprobs = Some(logprobs);
+                Ok(self)
+            }
+        }
     }
 
+    /// Echo back the prompt in addition to the completion
     pub fn echo(mut self, echo: bool) -> Self {
         self.echo = Some(echo);
         self

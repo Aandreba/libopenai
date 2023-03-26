@@ -3,12 +3,14 @@ use std::fmt::{Debug, Display};
 
 pub type Result<T, E = Error> = ::core::result::Result<T, E>;
 
+/// An error returned by a builder
 #[derive(Debug)]
 pub struct BuilderError<T> {
     pub builder: T,
     pub err: Error,
 }
 
+// An error of the `libopenai` library
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("OpenAI error: {0}")]
@@ -34,6 +36,7 @@ pub(crate) enum FallibleResponse<T> {
     Err { error: OpenAiError },
 }
 
+/// Error returned by an OpenAI API's endpoint
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct OpenAiError {
