@@ -1,4 +1,4 @@
-use crate::api::error::FallibleResponse;
+use crate::error::FallibleResponse;
 
 use super::error::Result;
 use reqwest::Client;

@@ -29,7 +29,7 @@ pub enum Error {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-pub(in crate::api) enum FallibleResponse<T> {
+pub(crate) enum FallibleResponse<T> {
     Ok(T),
     Err { error: OpenAiError },
 }
@@ -40,8 +40,8 @@ pub struct OpenAiError {
     pub message: String,
     #[serde(rename = "type")]
     pub ty: String,
-    pub param: Option<serde_json::Value>,
-    pub code: Option<serde_json::Value>,
+    pub param: Option<String>,
+    pub code: Option<String>,
 }
 
 impl Error {

@@ -4,7 +4,7 @@ use super::{
     error::{BuilderError, Result},
     Str,
 };
-use crate::api::error::FallibleResponse;
+use crate::error::FallibleResponse;
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -34,10 +34,10 @@ pub struct Builder<'a> {
 
 impl Edit {
     #[inline]
-    pub async fn create(
+    pub async fn new(
         model: impl AsRef<str>,
-        instruction: impl AsRef<str>,
         input: impl AsRef<str>,
+        instruction: impl AsRef<str>,
         api_key: impl AsRef<str>,
     ) -> Result<Self> {
         return Self::builder(model.as_ref(), instruction.as_ref())

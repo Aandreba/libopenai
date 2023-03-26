@@ -3,20 +3,36 @@ use super::{
     error::{BuilderError, Result},
     Str,
 };
-use crate::api::{
+use crate::{
     error::{Error, FallibleResponse, OpenAiError},
     trim_ascii_start,
 };
 use chrono::{DateTime, Utc};
-use futures::{future::ready, ready, Stream, TryStreamExt};
+use futures::{ready, Stream, TryStreamExt};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive, pin::Pin};
+use std::{borrow::Cow, collections::HashMap, future::ready, ops::RangeInclusive, pin::Pin};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum Role {
+    #[default]
+    User,
+    System,
+    Assistant,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message<'a> {
+    pub role: Role,
+    pub content: Str<'a>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Choice {
-    pub text: String,
+    pub message: Message<'static>,
     pub index: u32,
     #[serde(default)]
     pub lobprogs: Option<Vec<serde_json::Value>>,
@@ -44,11 +60,8 @@ pub struct CompletionStream {
 #[derive(Debug, Clone, Serialize)]
 pub struct Builder<'a> {
     model: Str<'a>,
+    messages: Vec<Message<'a>>,
     stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    prompt: Option<Vec<Str<'a>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    suffix: Option<Str<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,93 +71,98 @@ pub struct Builder<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     n: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    logprobs: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    echo: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<Str<'a>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     presence_penalty: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    best_of: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     logit_bias: Option<HashMap<Str<'a>, f64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<Str<'a>>,
 }
 
-impl Completion {
+impl<'a> Message<'a> {
     #[inline]
-    pub async fn create(
-        model: impl AsRef<str>,
-        prompt: impl Into<String>,
-        api_key: impl AsRef<str>,
-    ) -> Result<Self> {
-        return Self::builder(model.as_ref())
-            .prompt([prompt.into()].as_slice())
-            .build(api_key.as_ref())
-            .await;
+    pub fn new(role: Role, content: impl Into<Str<'a>>) -> Self {
+        return Self {
+            role,
+            content: content.into(),
+        };
     }
 
     #[inline]
-    pub async fn create_stream(
-        model: impl AsRef<str>,
-        prompt: impl Into<String>,
-        api_key: impl AsRef<str>,
-    ) -> Result<CompletionStream> {
-        return CompletionStream::create(model, prompt, api_key).await;
+    pub fn user(content: impl Into<Str<'a>>) -> Self {
+        return Self::new(Role::User, content);
     }
 
     #[inline]
-    pub fn builder<'a>(model: impl Into<Str<'a>>) -> Builder<'a> {
-        return Builder::new(model);
+    pub fn system(content: impl Into<Str<'a>>) -> Self {
+        return Self::new(Role::System, content);
+    }
+
+    #[inline]
+    pub fn assistant(content: impl Into<Str<'a>>) -> Self {
+        return Self::new(Role::Assistant, content);
     }
 }
 
 impl Completion {
     #[inline]
-    pub fn first(&self) -> Option<&str> {
-        return Some(&self.choices.first()?.text);
+    pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
+        model: impl Into<Str<'a>>,
+        messages: I,
+        api_key: impl AsRef<str>,
+    ) -> Result<Self> {
+        return Self::builder(model, messages).build(api_key.as_ref()).await;
     }
 
     #[inline]
-    pub fn into_first(self) -> Option<String> {
-        return Some(self.choices.into_iter().next()?.text);
+    pub async fn create_stream<'a, I: IntoIterator<Item = Message<'a>>>(
+        model: impl Into<Str<'a>>,
+        messages: I,
+        api_key: impl AsRef<str>,
+    ) -> Result<CompletionStream> {
+        return CompletionStream::create(model, messages, api_key).await;
+    }
+
+    #[inline]
+    pub fn builder<'a, I: IntoIterator<Item = Message<'a>>>(
+        model: impl Into<Str<'a>>,
+        messages: I,
+    ) -> Builder<'a> {
+        return Builder::new(model, messages);
+    }
+}
+
+impl Completion {
+    #[inline]
+    pub fn first(&self) -> Option<&Message<'static>> {
+        return Some(&self.choices.first()?.message);
+    }
+
+    #[inline]
+    pub fn into_first(self) -> Option<Message<'static>> {
+        return Some(self.choices.into_iter().next()?.message);
     }
 }
 
 impl<'a> Builder<'a> {
-    pub fn new(model: impl Into<Cow<'a, str>>) -> Self {
+    pub fn new<I: IntoIterator<Item = Message<'a>>>(
+        model: impl Into<Cow<'a, str>>,
+        messages: I,
+    ) -> Self {
         return Self {
             model: model.into(),
-            prompt: None,
-            suffix: None,
+            messages: messages.into_iter().collect(),
             max_tokens: None,
             temperature: None,
             top_p: None,
             n: None,
             stream: false,
-            logprobs: None,
-            echo: None,
             presence_penalty: None,
-            best_of: None,
             logit_bias: None,
             user: None,
             stop: None,
         };
-    }
-
-    pub fn prompt<I: IntoIterator>(mut self, prompt: I) -> Self
-    where
-        I::Item: Into<Str<'a>>,
-    {
-        self.prompt = Some(prompt.into_iter().map(Into::into).collect());
-        self
-    }
-
-    pub fn suffix(mut self, suffix: impl Into<Str<'a>>) -> Self {
-        self.suffix = Some(suffix.into());
-        self
     }
 
     pub fn max_tokens(mut self, max_tokens: u32) -> Self {
@@ -176,16 +194,6 @@ impl<'a> Builder<'a> {
 
     pub fn n(mut self, n: u32) -> Self {
         self.n = Some(n);
-        self
-    }
-
-    pub fn logprobs(mut self, logprobs: u32) -> Self {
-        self.logprobs = Some(logprobs);
-        self
-    }
-
-    pub fn echo(mut self, echo: bool) -> Self {
-        self.echo = Some(echo);
         self
     }
 
@@ -226,11 +234,6 @@ impl<'a> Builder<'a> {
         };
     }
 
-    pub fn best_of(mut self, best_of: u32) -> Self {
-        self.best_of = Some(best_of);
-        self
-    }
-
     pub fn logit_bias<K, I>(mut self, logit_bias: I) -> Self
     where
         K: Into<Str<'a>>,
@@ -248,7 +251,7 @@ impl<'a> Builder<'a> {
     pub async fn build(self, api_key: &str) -> Result<Completion> {
         let client = Client::new();
         let resp = client
-            .post("https://api.openai.com/v1/completions")
+            .post("https://api.openai.com/v1/chat/completions")
             .bearer_auth(api_key)
             .json(&self)
             .send()
@@ -264,7 +267,7 @@ impl<'a> Builder<'a> {
         self.stream = true;
         let client = Client::new();
         let resp = client
-            .post("https://api.openai.com/v1/completions")
+            .post("https://api.openai.com/v1/chat/completions")
             .bearer_auth(api_key)
             .json(&self)
             .send()
@@ -276,13 +279,12 @@ impl<'a> Builder<'a> {
 
 impl CompletionStream {
     #[inline]
-    pub async fn create(
-        model: impl AsRef<str>,
-        prompt: impl Into<String>,
+    pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
+        model: impl Into<Str<'a>>,
+        messages: I,
         api_key: impl AsRef<str>,
-    ) -> Result<CompletionStream> {
-        return Completion::builder(model.as_ref())
-            .prompt([prompt.into()].as_slice())
+    ) -> Result<Self> {
+        return Completion::builder(model, messages)
             .build_stream(api_key.as_ref())
             .await;
     }
@@ -296,10 +298,10 @@ impl CompletionStream {
 }
 
 impl CompletionStream {
-    pub fn into_text_stream(self) -> impl Stream<Item = Result<String>> {
+    pub fn into_message_stream(self) -> impl Stream<Item = Result<Message<'static>>> {
         return self
             .try_filter_map(|x| ready(Ok(x.choices.into_iter().next())))
-            .map_ok(|x| x.text);
+            .map_ok(|x| x.message);
     }
 }
 

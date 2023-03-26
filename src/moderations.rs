@@ -1,5 +1,5 @@
 use super::error::Result;
-use crate::api::error::FallibleResponse;
+use crate::error::FallibleResponse;
 use reqwest::Client;
 use serde::Deserialize;
 

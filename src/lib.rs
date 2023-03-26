@@ -6,11 +6,11 @@ pub mod audio;
 pub mod chat;
 pub mod common;
 pub mod completion;
-pub mod edit;
 pub mod error;
 pub mod image;
 pub mod model;
 pub mod moderations;
+// pub mod edit;
 
 pub mod prelude {
     use super::*;
@@ -26,7 +26,7 @@ pub mod prelude {
     pub use completion::Completion;
     pub use completion::CompletionStream;
 
-    pub use edit::Edit;
+    // pub use edit::Edit;
 
     pub use error::Error;
 
@@ -41,12 +41,12 @@ pub mod prelude {
 
 #[inline]
 #[allow(unused)]
-pub(super) fn trim_ascii(ascii: &[u8]) -> &[u8] {
+pub(crate) fn trim_ascii(ascii: &[u8]) -> &[u8] {
     return trim_ascii_end(trim_ascii_start(ascii));
 }
 
 #[allow(unused)]
-pub(super) fn trim_ascii_start(mut ascii: &[u8]) -> &[u8] {
+pub(crate) fn trim_ascii_start(mut ascii: &[u8]) -> &[u8] {
     loop {
         match ascii.first() {
             Some(&x) if x.is_ascii_whitespace() => ascii = &ascii[1..],
@@ -57,7 +57,7 @@ pub(super) fn trim_ascii_start(mut ascii: &[u8]) -> &[u8] {
 }
 
 #[allow(unused)]
-pub(super) fn trim_ascii_end(mut ascii: &[u8]) -> &[u8] {
+pub(crate) fn trim_ascii_end(mut ascii: &[u8]) -> &[u8] {
     loop {
         match ascii.last() {
             Some(&x) if x.is_ascii_whitespace() => ascii = &ascii[..ascii.len() - 1],

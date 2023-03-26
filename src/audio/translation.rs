@@ -1,7 +1,7 @@
 use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 
 use super::ResponseFormat;
-use crate::api::error::{BuilderError, Error, OpenAiError, Result};
+use crate::error::{BuilderError, Error, OpenAiError, Result};
 use bytes::Bytes;
 use futures::TryStream;
 use rand::random;
@@ -13,21 +13,19 @@ use serde::Deserialize;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
-pub struct Transcription {
+pub struct Translation {
     prompt: Option<String>,
     response_format: Option<ResponseFormat>,
     temperature: Option<f64>,
-    language: Option<String>,
 }
 
-impl Transcription {
+impl Translation {
     #[inline]
     pub fn new() -> Self {
         return Self {
             prompt: None,
             response_format: None,
             temperature: None,
-            language: None,
         };
     }
 
@@ -53,11 +51,6 @@ impl Transcription {
                 format!("temperature out of range ({RANGE:?})"),
             )),
         }
-    }
-
-    pub fn language(mut self, language: impl Into<String>) -> Self {
-        self.language = Some(language.into());
-        self
     }
 
     pub async fn with_file(
@@ -142,12 +135,9 @@ impl Transcription {
         if let Some(temperature) = self.temperature {
             body = body.text("temperature", format!("{temperature}"))
         }
-        if let Some(language) = self.language {
-            body = body.text("language", language)
-        }
 
         let resp = client
-            .post("https://api.openai.com/v1/audio/transcriptions")
+            .post("https://api.openai.com/v1/audio/translations")
             .bearer_auth(api_key.as_ref())
             .multipart(body)
             .send()

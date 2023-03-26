@@ -1,5 +1,5 @@
 use super::{Images, ResponseFormat, Size};
-use crate::api::{
+use crate::{
     error::{BuilderError, Error, FallibleResponse, Result},
     Str,
 };

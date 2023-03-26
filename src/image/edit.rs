@@ -1,19 +1,19 @@
 use super::{load_image, Images, ResponseFormat, Size};
-use crate::api::error::{BuilderError, Error, FallibleResponse, Result};
+use crate::error::{BuilderError, Error, FallibleResponse, Result};
 use bytes::Bytes;
-use futures::TryStream;
-use rand::random;
+use futures::{future::try_join, FutureExt, TryStream};
+use rand::{distributions::Standard, thread_rng, Rng};
 use reqwest::{
     multipart::{Form, Part},
     Body, Client,
 };
-use std::path::PathBuf;
-use std::{ffi::OsStr, ops::RangeInclusive};
+use std::{ffi::OsStr, ops::RangeInclusive, path::PathBuf};
 use tokio::task::spawn_blocking;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
 pub struct Builder {
+    prompt: String,
     n: Option<u32>,
     size: Option<Size>,
     response_format: Option<ResponseFormat>,
@@ -22,20 +22,26 @@ pub struct Builder {
 
 impl Images {
     #[inline]
-    pub fn variation() -> Builder {
-        return Builder::new();
+    pub fn edit(prompt: impl Into<String>) -> Result<Builder> {
+        return Builder::new(prompt);
     }
 }
 
 impl Builder {
     #[inline]
-    pub fn new() -> Self {
-        return Self {
+    pub fn new(prompt: impl Into<String>) -> Result<Self> {
+        let prompt: String = prompt.into();
+        if prompt.len() > 1000 {
+            return Err(Error::msg("Message excedes character limit of 1000"));
+        }
+
+        return Ok(Self {
+            prompt: prompt.into(),
             n: None,
             size: None,
             response_format: None,
             user: None,
-        };
+        });
     }
 
     #[inline]
@@ -71,25 +77,50 @@ impl Builder {
         self
     }
 
+    /// Sends the request with the specified files.
+    /// If the images do not conform to OpenAI's requirements (square PNG), they will be adapted before they are sent
     pub async fn with_file(
         self,
         image: impl Into<PathBuf>,
+        mask: Option<PathBuf>,
         api_key: impl AsRef<str>,
     ) -> Result<Images> {
-        let image_path: PathBuf = image.into();
-        let my_image_path = image_path.clone();
+        let mut rng = thread_rng();
+        let (image, mask) = match mask {
+            Some(mask) => {
+                let image: PathBuf = image.into();
+                let image_name = match image.file_name().map(OsStr::to_string_lossy) {
+                    Some(x) => x.into_owned(),
+                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
+                };
+                let mask_name = match mask.file_name().map(OsStr::to_string_lossy) {
+                    Some(x) => x.into_owned(),
+                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
+                };
 
-        let image = spawn_blocking(move || load_image(my_image_path))
-            .await
-            .unwrap()?;
+                let (image, mask) = try_join(
+                    spawn_blocking(move || load_image(image)).map(Result::unwrap),
+                    spawn_blocking(move || load_image(mask)).map(Result::unwrap),
+                )
+                .await?;
+                (
+                    Part::stream(Body::from(image)).file_name(image_name),
+                    Some(Part::stream(Body::from(mask)).file_name(mask_name)),
+                )
+            }
+            None => {
+                let image: PathBuf = image.into();
+                let name = match image.file_name().map(OsStr::to_string_lossy) {
+                    Some(x) => x.into_owned(),
+                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
+                };
 
-        let name = match image_path.file_name().map(OsStr::to_string_lossy) {
-            Some(x) => x.into_owned(),
-            None => format!("{}.png", random::<u64>()),
+                let image = spawn_blocking(move || load_image(image)).await.unwrap()?;
+                (Part::stream(Body::from(image)).file_name(name), None)
+            }
         };
 
-        let image = Part::stream(image).file_name(name);
-        return self.with_part(image, api_key).await;
+        return self.with_part(image, mask, api_key).await;
     }
 
     pub async fn with_tokio_reader<I>(self, image: I, api_key: impl AsRef<str>) -> Result<Images>
@@ -105,27 +136,43 @@ impl Builder {
         I::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
         Bytes: From<I::Ok>,
     {
-        return self.with_body(Body::wrap_stream(image), api_key).await;
+        return self
+            .with_body(Body::wrap_stream(image), None, api_key)
+            .await;
     }
 
     pub async fn with_body(
         self,
         image: impl Into<Body>,
+        mask: Option<Body>,
         api_key: impl AsRef<str>,
     ) -> Result<Images> {
+        let mut rng = thread_rng();
+
         return self
             .with_part(
-                Part::stream(image).file_name(format!("{}.png", random::<u64>())),
+                Part::stream(image).file_name(format!("{}.png", rng.sample::<u64, _>(Standard))),
+                mask.map(|mask| {
+                    Part::stream(mask).file_name(format!("{}.png", rng.sample::<u64, _>(Standard)))
+                }),
                 api_key,
             )
             .await;
     }
 
-    pub async fn with_part(self, image: Part, api_key: impl AsRef<str>) -> Result<Images> {
+    pub async fn with_part(
+        self,
+        image: Part,
+        mask: Option<Part>,
+        api_key: impl AsRef<str>,
+    ) -> Result<Images> {
         let client = Client::new();
 
-        let mut body = Form::new().part("image", image);
+        let mut body = Form::new().text("prompt", self.prompt).part("image", image);
 
+        if let Some(mask) = mask {
+            body = body.part("mask", mask)
+        }
         if let Some(n) = self.n {
             body = body.text("n", format!("{n}"))
         }
@@ -152,7 +199,7 @@ impl Builder {
         }
 
         let resp = client
-            .post("https://api.openai.com/v1/images/variations")
+            .post("https://api.openai.com/v1/images/edits")
             .bearer_auth(api_key.as_ref())
             .multipart(body)
             .send()
