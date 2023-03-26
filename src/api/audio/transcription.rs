@@ -1,7 +1,7 @@
 use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 
 use super::ResponseFormat;
-use crate::api::error::{Error, OpenAiError, Result};
+use crate::api::error::{BuilderError, Error, OpenAiError, Result};
 use bytes::Bytes;
 use futures::TryStream;
 use rand::random;
@@ -41,14 +41,17 @@ impl Transcription {
         self
     }
 
-    pub fn temperature(mut self, temperature: f64) -> Result<Self, Self> {
+    pub fn temperature(mut self, temperature: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = 0f64..=1f64;
         match RANGE.contains(&temperature) {
             true => {
                 self.temperature = Some(temperature);
                 Ok(self)
             }
-            false => Err(self),
+            false => Err(BuilderError::msg(
+                self,
+                format!("temperature out of range ({RANGE:?})"),
+            )),
         }
     }
 

@@ -1,5 +1,5 @@
 use super::{load_image, Images, ResponseFormat, Size};
-use crate::api::error::{Error, FallibleResponse, Result};
+use crate::api::error::{BuilderError, Error, FallibleResponse, Result};
 use bytes::Bytes;
 use futures::{future::try_join, FutureExt, TryStream};
 use rand::{distributions::Standard, thread_rng, Rng};
@@ -45,14 +45,17 @@ impl Builder {
     }
 
     #[inline]
-    pub fn n(mut self, n: u32) -> Result<Self, Self> {
+    pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<u32> = 1..=10;
         return match RANGE.contains(&n) {
             true => {
                 self.n = Some(n);
                 Ok(self)
             }
-            false => Err(self),
+            false => Err(BuilderError::msg(
+                self,
+                format!("n out of range ({RANGE:?})"),
+            )),
         };
     }
 
@@ -74,6 +77,8 @@ impl Builder {
         self
     }
 
+    /// Sends the request with the specified files.
+    /// If the images do not conform to OpenAI's requirements (square PNG), they will be adapted before they are sent
     pub async fn with_file(
         self,
         image: impl Into<PathBuf>,

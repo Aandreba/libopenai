@@ -1,5 +1,5 @@
 use super::{load_image, Images, ResponseFormat, Size};
-use crate::api::error::{Error, FallibleResponse, Result};
+use crate::api::error::{BuilderError, Error, FallibleResponse, Result};
 use bytes::Bytes;
 use futures::TryStream;
 use rand::random;
@@ -39,14 +39,17 @@ impl Builder {
     }
 
     #[inline]
-    pub fn n(mut self, n: u32) -> Result<Self, Self> {
+    pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<u32> = 1..=10;
         return match RANGE.contains(&n) {
             true => {
                 self.n = Some(n);
                 Ok(self)
             }
-            false => Err(self),
+            false => Err(BuilderError::msg(
+                self,
+                format!("n out of range ({RANGE:?})"),
+            )),
         };
     }
 

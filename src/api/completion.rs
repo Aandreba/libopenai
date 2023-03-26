@@ -1,9 +1,12 @@
 use super::{
     common::{Choice, Usage},
-    error::Result,
+    error::{BuilderError, Result},
     Str,
 };
-use crate::api::{error::FallibleResponse, trim_ascii_start};
+use crate::api::{
+    error::{Error, FallibleResponse, OpenAiError},
+    trim_ascii_start,
+};
 use chrono::{DateTime, Utc};
 use futures::{future::ready, ready, Stream, TryStreamExt};
 use reqwest::{Client, Response};
@@ -32,18 +35,32 @@ pub struct CompletionStream {
 #[derive(Debug, Clone, Serialize)]
 pub struct Builder<'a> {
     model: Str<'a>,
-    prompt: Option<Vec<Str<'a>>>,
-    suffix: Option<Str<'a>>,
-    max_tokens: Option<u32>,
-    temperature: Option<f64>,
-    top_p: Option<f64>,
-    n: Option<u32>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompt: Option<Vec<Str<'a>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suffix: Option<Str<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    n: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     logprobs: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     echo: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<Str<'a>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     presence_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     best_of: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     logit_bias: Option<HashMap<Str<'a>, f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<Str<'a>>,
 }
 
@@ -55,7 +72,7 @@ impl Completion {
         api_key: impl AsRef<str>,
     ) -> Result<Self> {
         return Self::builder(model.as_ref())
-            .set_prompts([prompt.into()].as_slice())
+            .prompt([prompt.into()].as_slice())
             .build(api_key.as_ref())
             .await;
     }
@@ -104,26 +121,15 @@ impl<'a> Builder<'a> {
             best_of: None,
             logit_bias: None,
             user: None,
+            stop: None,
         };
     }
 
-    pub fn set_prompts<I: IntoIterator>(mut self, prompt: I) -> Self
+    pub fn prompt<I: IntoIterator>(mut self, prompt: I) -> Self
     where
         I::Item: Into<Str<'a>>,
     {
         self.prompt = Some(prompt.into_iter().map(Into::into).collect());
-        self
-    }
-
-    pub fn append_prompts<I: IntoIterator>(mut self, prompt: I) -> Self
-    where
-        I::Item: Into<Str<'a>>,
-    {
-        let prompt = prompt.into_iter().map(Into::into);
-        match self.prompt {
-            Some(ref mut current) => current.extend(prompt),
-            None => self.prompt = Some(prompt.collect()),
-        }
         self
     }
 
@@ -140,14 +146,17 @@ impl<'a> Builder<'a> {
     /// What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
     ///
     /// We generally recommend altering this or `top_p` but not both.
-    pub fn temperature(mut self, temperature: f64) -> Result<Self, Self> {
+    pub fn temperature(mut self, temperature: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = 0f64..=2f64;
         return match RANGE.contains(&temperature) {
             true => {
                 self.temperature = Some(temperature);
                 Ok(self)
             }
-            false => Err(self),
+            false => Err(BuilderError::msg(
+                self,
+                format!("temperature out of range ({RANGE:?})"),
+            )),
         };
     }
 
@@ -171,16 +180,40 @@ impl<'a> Builder<'a> {
         self
     }
 
-    /* TODO stop */
+    pub fn stop<I: IntoIterator>(mut self, stop: I) -> Result<Self, BuilderError<Self>>
+    where
+        I::Item: Into<Str<'a>>,
+    {
+        const MAX_SIZE: usize = 4;
 
-    pub fn presence_penalty(mut self, presence_penalty: f64) -> Result<Self, Self> {
+        let mut stop = stop.into_iter();
+        let mut result = Vec::with_capacity(MAX_SIZE);
+
+        while let Some(next) = stop.next() {
+            if result.len() == result.capacity() {
+                return Err(BuilderError::msg(
+                    self,
+                    format!("Interator exceeds size limit of {MAX_SIZE}"),
+                ));
+            }
+            result.push(next.into());
+        }
+
+        self.stop = Some(result);
+        return Ok(self);
+    }
+
+    pub fn presence_penalty(mut self, presence_penalty: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = -2f64..=2f64;
         return match RANGE.contains(&presence_penalty) {
             true => {
                 self.presence_penalty = Some(presence_penalty);
                 Ok(self)
             }
-            false => Err(self),
+            false => Err(BuilderError::msg(
+                self,
+                format!("presence_penalty out of range ({RANGE:?})"),
+            )),
         };
     }
 
@@ -240,7 +273,7 @@ impl CompletionStream {
         api_key: impl AsRef<str>,
     ) -> Result<CompletionStream> {
         return Completion::builder(model.as_ref())
-            .set_prompts([prompt.into()].as_slice())
+            .prompt([prompt.into()].as_slice())
             .build_stream(api_key.as_ref())
             .await;
     }
@@ -271,16 +304,25 @@ impl Stream for CompletionStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         const DONE: &[u8] = b"[DONE]";
 
+        #[derive(Debug, Deserialize)]
+        struct ChunkError {
+            error: OpenAiError,
+        }
+
         match ready!(self.inner.as_mut().poll_next(cx)) {
             Some(Ok(x)) => {
+                // Check if chunk is error
+                if let Ok(ChunkError { error }) = serde_json::from_slice::<ChunkError>(&x) {
+                    return std::task::Poll::Ready(Some(Err(Error::from(error))));
+                }
+
                 // remove initial "data"
                 let x: &[u8] = trim_ascii_start(&x[5..]);
                 if x.starts_with(DONE) {
                     return std::task::Poll::Ready(None);
                 }
 
-                let json =
-                    serde_json::from_slice::<FallibleResponse<Completion>>(x)?.into_result()?;
+                let json = serde_json::from_slice::<Completion>(x)?;
                 return std::task::Poll::Ready(Some(Ok(json)));
             }
             Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),

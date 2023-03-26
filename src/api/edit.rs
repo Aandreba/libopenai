@@ -1,6 +1,6 @@
 use super::{
     common::{Choice, Usage},
-    error::Result,
+    error::{BuilderError, Result},
     Str,
 };
 use crate::api::error::FallibleResponse;
@@ -76,14 +76,17 @@ impl<'a> Builder<'a> {
     /// What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
     ///
     /// We generally recommend altering this or `top_p` but not both.
-    pub fn temperature(mut self, temperature: f64) -> Result<Self, Self> {
+    pub fn temperature(mut self, temperature: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = 0f64..=2f64;
         return match RANGE.contains(&temperature) {
             true => {
                 self.temperature = Some(temperature);
                 Ok(self)
             }
-            false => Err(self),
+            false => Err(BuilderError::msg(
+                self,
+                format!("temperature out of range ({RANGE:?})"),
+            )),
         };
     }
 
