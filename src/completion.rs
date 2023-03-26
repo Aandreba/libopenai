@@ -43,6 +43,7 @@ pub struct CompletionStream {
     inner: Pin<Box<dyn Stream<Item = reqwest::Result<bytes::Bytes>>>>,
 }
 
+/// [`Completion`]/[`CompletionStream`] request builder
 #[derive(Debug, Clone, Serialize)]
 pub struct Builder<'a> {
     model: Str<'a>,

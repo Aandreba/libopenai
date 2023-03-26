@@ -13,6 +13,7 @@ use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, future::ready, ops::RangeInclusive, pin::Pin};
 
+/// Message role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -40,6 +41,7 @@ pub struct Choice {
     pub finish_reason: Option<String>,
 }
 
+/// Given a chat conversation, the model will return a chat completion response.
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Completion {
@@ -53,10 +55,12 @@ pub struct Completion {
     pub usage: Option<Usage>,
 }
 
+/// Given a chat conversation, the model will return a chat completion response.
 pub struct CompletionStream {
     inner: Pin<Box<dyn Stream<Item = reqwest::Result<bytes::Bytes>>>>,
 }
 
+/// [`Completion`]/[`CompletionStream`] request builder
 #[derive(Debug, Clone, Serialize)]
 pub struct Builder<'a> {
     model: Str<'a>,
@@ -73,6 +77,8 @@ pub struct Builder<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<Str<'a>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     presence_penalty: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     logit_bias: Option<HashMap<Str<'a>, f64>>,
@@ -81,6 +87,7 @@ pub struct Builder<'a> {
 }
 
 impl<'a> Message<'a> {
+    /// Creates a new message
     #[inline]
     pub fn new(role: Role, content: impl Into<Str<'a>>) -> Self {
         return Self {
@@ -89,16 +96,19 @@ impl<'a> Message<'a> {
         };
     }
 
+    /// Creates a new message with a role of [`User`](Role::User)
     #[inline]
     pub fn user(content: impl Into<Str<'a>>) -> Self {
         return Self::new(Role::User, content);
     }
 
+    /// Creates a new message with a role of [`System`](Role::System)
     #[inline]
     pub fn system(content: impl Into<Str<'a>>) -> Self {
         return Self::new(Role::System, content);
     }
 
+    /// Creates a new message with a role of [`Assistant`](Role::Assistant)
     #[inline]
     pub fn assistant(content: impl Into<Str<'a>>) -> Self {
         return Self::new(Role::Assistant, content);
@@ -106,6 +116,7 @@ impl<'a> Message<'a> {
 }
 
 impl Completion {
+    /// Creates a completion for the chat message
     #[inline]
     pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
@@ -115,6 +126,7 @@ impl Completion {
         return Self::builder(model, messages).build(api_key.as_ref()).await;
     }
 
+    /// Creates a completion for the chat message
     #[inline]
     pub async fn create_stream<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
@@ -124,6 +136,7 @@ impl Completion {
         return CompletionStream::create(model, messages, api_key).await;
     }
 
+    /// Creates a new chat completion request builder
     #[inline]
     pub fn builder<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
@@ -134,18 +147,21 @@ impl Completion {
 }
 
 impl Completion {
+    /// Returns a reference to the first [`Choice`]
     #[inline]
-    pub fn first(&self) -> Option<&Message<'static>> {
-        return Some(&self.choices.first()?.message);
+    pub fn first(&self) -> Option<&Choice> {
+        return self.choices.first();
     }
 
+    /// Returns the first [`Choice`]
     #[inline]
-    pub fn into_first(self) -> Option<Message<'static>> {
-        return Some(self.choices.into_iter().next()?.message);
+    pub fn into_first(self) -> Option<Choice> {
+        return self.choices.into_iter().next();
     }
 }
 
 impl<'a> Builder<'a> {
+    /// Creates a new chat completion request builder
     pub fn new<I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Cow<'a, str>>,
         messages: I,
@@ -159,12 +175,16 @@ impl<'a> Builder<'a> {
             n: None,
             stream: false,
             presence_penalty: None,
+            frequency_penalty: None,
             logit_bias: None,
             user: None,
             stop: None,
         };
     }
 
+    /// The maximum number of tokens to generate in the chat completion.
+    ///
+    /// The total length of input tokens and generated tokens is limited by the model's context length.
     pub fn max_tokens(mut self, max_tokens: u32) -> Self {
         self.max_tokens = Some(max_tokens);
         self
@@ -187,16 +207,21 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+    ///
+    /// We generally recommend altering this or `temperature` but not both.
     pub fn top_p(mut self, top_p: f64) -> Self {
         self.top_p = Some(top_p);
         self
     }
 
+    /// How many chat completion choices to generate for each input message.
     pub fn n(mut self, n: u32) -> Self {
         self.n = Some(n);
         self
     }
 
+    /// Up to 4 sequences where the API will stop generating further tokens.
     pub fn stop<I: IntoIterator>(mut self, stop: I) -> Result<Self, BuilderError<Self>>
     where
         I::Item: Into<Str<'a>>,
@@ -220,6 +245,7 @@ impl<'a> Builder<'a> {
         return Ok(self);
     }
 
+    /// Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
     pub fn presence_penalty(mut self, presence_penalty: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = -2f64..=2f64;
         return match RANGE.contains(&presence_penalty) {
@@ -230,6 +256,21 @@ impl<'a> Builder<'a> {
             false => Err(BuilderError::msg(
                 self,
                 format!("presence_penalty out of range ({RANGE:?})"),
+            )),
+        };
+    }
+
+    /// Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
+    pub fn frequency_penalty(mut self, frequency_penalty: f64) -> Result<Self, BuilderError<Self>> {
+        const RANGE: RangeInclusive<f64> = -2f64..=2f64;
+        return match RANGE.contains(&frequency_penalty) {
+            true => {
+                self.frequency_penalty = Some(frequency_penalty);
+                Ok(self)
+            }
+            false => Err(BuilderError::msg(
+                self,
+                format!("frequency_penalty out of range ({RANGE:?})"),
             )),
         };
     }
