@@ -1,8 +1,4 @@
-use crate::api::{
-    audio::transcription::Transcription,
-    image::{self, Images},
-    moderations::Moderation,
-};
+use crate::api::image::{self, Images};
 use api::{completion::Completion, edit::Edit};
 pub mod api;
 
@@ -14,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
         .n(2)
         .unwrap()
         .size(image::Size::P512)
-        .with_file("media/me.png", &api_key)
+        .with_file("media/primeagen.png", &api_key)
         .await?;
 
     println!("{similar:#?}");

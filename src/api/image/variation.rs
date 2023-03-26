@@ -1,6 +1,6 @@
 use super::{Images, ResponseFormat, Size};
 use crate::api::error::{Error, FallibleResponse, Result};
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures::TryStream;
 use image::codecs::png::PngDecoder;
 use image::io::Reader as ImageReader;
@@ -11,7 +11,6 @@ use reqwest::{
     Body, Client,
 };
 use std::io::Cursor;
-use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::{
     ffi::OsStr,
@@ -77,6 +76,7 @@ impl Builder {
         self
     }
 
+    /* TODO FIX BUG */
     pub async fn with_file(
         self,
         image: impl Into<PathBuf>,
@@ -142,7 +142,10 @@ impl Builder {
         .unwrap()?;
 
         let name = match image_path.file_name().map(OsStr::to_string_lossy) {
-            Some(x) => x.into_owned(),
+            Some(x) => {
+                println!("{x}");
+                x.into_owned()
+            }
             None => format!("{}.png", random::<u64>()),
         };
 
