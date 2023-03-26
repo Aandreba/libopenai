@@ -1,13 +1,14 @@
-use super::{Images, ResponseFormat, Size};
+use super::{load_image, Images, ResponseFormat, Size};
 use crate::api::error::{Error, FallibleResponse, Result};
 use bytes::Bytes;
-use futures::{future::try_join, TryStream};
+use futures::{future::try_join, FutureExt, TryStream};
 use rand::{distributions::Standard, thread_rng, Rng};
 use reqwest::{
     multipart::{Form, Part},
     Body, Client,
 };
-use std::{ffi::OsStr, ops::RangeInclusive, path::Path};
+use std::{ffi::OsStr, ops::RangeInclusive, path::PathBuf};
+use tokio::task::spawn_blocking;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
@@ -75,14 +76,14 @@ impl Builder {
 
     pub async fn with_file(
         self,
-        image: impl AsRef<Path>,
-        mask: Option<&Path>,
+        image: impl Into<PathBuf>,
+        mask: Option<PathBuf>,
         api_key: impl AsRef<str>,
     ) -> Result<Images> {
         let mut rng = thread_rng();
         let (image, mask) = match mask {
             Some(mask) => {
-                let image = image.as_ref();
+                let image: PathBuf = image.into();
                 let image_name = match image.file_name().map(OsStr::to_string_lossy) {
                     Some(x) => x.into_owned(),
                     None => format!("{}.png", rng.sample::<u64, _>(Standard)),
@@ -92,21 +93,24 @@ impl Builder {
                     None => format!("{}.png", rng.sample::<u64, _>(Standard)),
                 };
 
-                let (image, mask) =
-                    try_join(tokio::fs::File::open(image), tokio::fs::File::open(mask)).await?;
+                let (image, mask) = try_join(
+                    spawn_blocking(move || load_image(image)).map(Result::unwrap),
+                    spawn_blocking(move || load_image(mask)).map(Result::unwrap),
+                )
+                .await?;
                 (
                     Part::stream(Body::from(image)).file_name(image_name),
                     Some(Part::stream(Body::from(mask)).file_name(mask_name)),
                 )
             }
             None => {
-                let image = image.as_ref();
+                let image: PathBuf = image.into();
                 let name = match image.file_name().map(OsStr::to_string_lossy) {
                     Some(x) => x.into_owned(),
                     None => format!("{}.png", rng.sample::<u64, _>(Standard)),
                 };
 
-                let image = Body::from(tokio::fs::File::open(image).await?);
+                let image = spawn_blocking(move || load_image(image)).await.unwrap()?;
                 (Part::stream(Body::from(image)).file_name(name), None)
             }
         };

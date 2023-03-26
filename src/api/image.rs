@@ -7,10 +7,17 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use elor::{Either, LeftRight};
 use futures::{stream::FuturesUnordered, StreamExt, TryFutureExt, TryStream, TryStreamExt};
+use image::{
+    codecs::png::PngDecoder, ExtendedColorType, GenericImage, GenericImageView, ImageBuffer,
+    ImageDecoder, ImageFormat, ImageOutputFormat, Rgba,
+};
+use image::{io::Reader as ImageReader, DynamicImage};
 use rand::{distributions::Standard, thread_rng, Rng};
+use reqwest::Body;
 use serde::{Deserialize, Serialize};
 use std::{
     future::ready,
+    io::{Cursor, Read, Seek, SeekFrom},
     ops::Deref,
     panic::resume_unwind,
     path::{Path, PathBuf},
@@ -177,7 +184,77 @@ impl Data {
     }
 }
 
-pub async fn load_image(path: impl AsRef<Path>) {
-    let path: &Path = path.as_ref();
-    todo!()
+/// Note that this is a **blocking** method, and should not be used in async contexts
+pub fn load_image(path: impl AsRef<Path>) -> Result<Body> {
+    let mut image = std::fs::File::open(path)?;
+
+    // Read file magic number and seek back to start
+    let mut magic = [0; 8];
+    image.read_exact(&mut magic)?;
+    image.seek(SeekFrom::Start(0))?;
+
+    return match image::guess_format(&magic) {
+        // Image is a PNG
+        Ok(ImageFormat::Png) => {
+            let decoder = PngDecoder::new(&mut image)?;
+            let (width, height) = decoder.dimensions();
+
+            // Make image square (by adding transparent background)
+            if width != height {
+                let size = u32::max(width, height);
+                let image = DynamicImage::from_decoder(decoder)?;
+
+                let mut extended = ImageBuffer::<Rgba<u8>, _>::new(size, size);
+                extended.copy_from(&image, (size - width) / 2, (size - height) / 2)?;
+
+                let mut result = Cursor::new(Vec::new());
+                extended.write_to(&mut result, ImageOutputFormat::Png)?;
+                return Ok(Body::from(result.into_inner()));
+            }
+
+            // Check image color type
+            match decoder.original_color_type() {
+                // Image has RGBA color, pass directly for streaming.
+                ExtendedColorType::Rgba8 => {
+                    image.seek(SeekFrom::Start(0))?;
+                    Ok(Body::from(tokio::fs::File::from_std(image)))
+                }
+
+                // Transform image to RGBA PNG
+                _ => {
+                    let image = DynamicImage::from_decoder(decoder)?.to_rgba8();
+                    let mut result = Cursor::new(Vec::new());
+                    image.write_to(&mut result, ImageOutputFormat::Png)?;
+                    Ok(Body::from(result.into_inner()))
+                }
+            }
+        }
+
+        // Image isn't a PNG
+        _ => {
+            let image = ImageReader::new(std::io::BufReader::new(image))
+                .with_guessed_format()?
+                .decode()?;
+            let (width, height) = image.dimensions();
+
+            // Make image square (by adding transparent background)
+            if width != height {
+                let size = u32::max(width, height);
+
+                let mut extended = ImageBuffer::<Rgba<u8>, _>::new(size, size);
+                extended.copy_from(&image, (size - width) / 2, (size - height) / 2)?;
+
+                let mut result = Cursor::new(Vec::new());
+                extended.write_to(&mut result, ImageOutputFormat::Png)?;
+                return Ok(Body::from(result.into_inner()));
+            }
+
+            let mut output = Cursor::new(Vec::new());
+            image
+                .into_rgba8()
+                .write_to(&mut output, ImageOutputFormat::Png)?;
+
+            Result::<Body>::Ok(Body::from(output.into_inner()))
+        }
+    };
 }

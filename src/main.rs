@@ -1,39 +1,18 @@
 use crate::api::image::{self, Images};
-use api::{completion::Completion, edit::Edit};
+use api::completion::Completion;
 pub mod api;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let api_key = dotenv::var("API_KEY")?;
 
-    let similar = Images::variation()
-        .n(2)
-        .unwrap()
+    let similar = Images::edit("Sad man")?
         .size(image::Size::P512)
-        .with_file("media/primeagen.png", &api_key)
+        .with_file("media/me.jpg", None, &api_key)
         .await?;
 
     println!("{similar:#?}");
     return Ok(());
-}
-
-//Maybe broken?
-pub async fn edit_translate_to(target_lang: &str, input: &str) -> anyhow::Result<String> {
-    let api_key = dotenv::var("API_KEY")?;
-    let mut edit = Edit::create(
-        "text-davinci-edit-003",
-        format!("translate to {target_lang}"),
-        input,
-        &api_key,
-    )
-    .await?;
-
-    let first = edit
-        .choices
-        .first_mut()
-        .ok_or_else(|| anyhow::Error::msg("No choices found"))?;
-
-    return Ok(core::mem::take(&mut first.text));
 }
 
 pub async fn complete_translate_to(target_lang: &str, input: &str) -> anyhow::Result<String> {
