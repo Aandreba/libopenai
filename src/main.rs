@@ -37,7 +37,7 @@ pub async fn edit_translate_to(target_lang: &str, input: &str) -> anyhow::Result
 pub async fn complete_translate_to(target_lang: &str, input: &str) -> anyhow::Result<String> {
     let api_key = dotenv::var("API_KEY")?;
     let trans = Completion::builder("text-davinci-003")
-        .set_prompt(format!("translate \"{input}\" to {target_lang}"))
+        .set_prompts([format!("translate \"{input}\" to {target_lang}")])
         .temperature(0.0)
         .unwrap()
         .build(&api_key)

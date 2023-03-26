@@ -1,7 +1,7 @@
 use super::{
     common::{Choice, Usage},
     error::Result,
-    Slice, Str,
+    Str,
 };
 use crate::api::{error::FallibleResponse, trim_ascii_start};
 use chrono::{DateTime, Utc};
@@ -115,17 +115,14 @@ impl<'a> Builder<'a> {
         self
     }
 
-    pub fn append_prompts(mut self, prompt: impl Into<Cow<'a, [String]>>) -> Self {
-        let mut prompt: Cow<'a, [String]> = prompt.into();
+    pub fn append_prompts<I: IntoIterator>(mut self, prompt: I) -> Self
+    where
+        I::Item: Into<Str<'a>>,
+    {
+        let prompt = prompt.into_iter().map(Into::into);
         match self.prompt {
-            Some(ref mut prev) => {
-                let prev = Cow::to_mut(prev);
-                match prompt {
-                    Cow::Borrowed(x) => prev.extend_from_slice(x),
-                    Cow::Owned(ref mut x) => prev.append(x),
-                }
-            }
-            None => self.prompt = Some(prompt),
+            Some(ref mut current) => current.extend(prompt),
+            None => self.prompt = Some(prompt.collect()),
         }
         self
     }
