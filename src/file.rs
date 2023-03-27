@@ -30,7 +30,7 @@ pub struct File {
     pub purpose: String,
 }
 
-/// [`delete_file`] result
+/// Result of deleting a file
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Delete {

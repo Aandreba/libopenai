@@ -1,0 +1,7 @@
+## Lib OpenAI
+
+### Example
+
+```rust
+
+```

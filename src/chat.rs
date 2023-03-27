@@ -116,7 +116,7 @@ impl<'a> Message<'a> {
 impl ChatCompletion {
     /// Creates a completion for the chat message
     #[inline]
-    pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
+    pub async fn new<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
         client: impl AsRef<Client>,
@@ -126,12 +126,12 @@ impl ChatCompletion {
 
     /// Creates a completion for the chat message
     #[inline]
-    pub async fn create_stream<'a, I: IntoIterator<Item = Message<'a>>>(
+    pub async fn new_stream<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
         client: impl AsRef<Client>,
     ) -> Result<ChatCompletionStream> {
-        return ChatCompletionStream::create(model, messages, client).await;
+        return ChatCompletionStream::new(model, messages, client).await;
     }
 
     /// Creates a new chat completion request builder
@@ -319,14 +319,14 @@ impl<'a> ChatCompletionBuilder<'a> {
             .send()
             .await?;
 
-        return Ok(ChatCompletionStream::new(resp));
+        return Ok(ChatCompletionStream::create(resp));
     }
 }
 
 impl ChatCompletionStream {
     /// Creates a new edit for the provided input, instruction, and parameters.
     #[inline]
-    pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
+    pub async fn new<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
         client: impl AsRef<Client>,
@@ -337,7 +337,7 @@ impl ChatCompletionStream {
     }
 
     #[inline]
-    fn new(resp: Response) -> Self {
+    fn create(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
         };

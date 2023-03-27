@@ -82,7 +82,7 @@ pub struct CompletionBuilder<'a> {
 impl Completion {
     /// Creates a completion for the provided prompt and parameters
     #[inline]
-    pub async fn create(
+    pub async fn new(
         model: impl AsRef<str>,
         prompt: impl Into<String>,
         client: impl AsRef<Client>,
@@ -95,12 +95,12 @@ impl Completion {
 
     /// Creates a completion for the provided prompt and parameters
     #[inline]
-    pub async fn create_stream(
+    pub async fn new_stream(
         model: impl AsRef<str>,
         prompt: impl Into<String>,
         client: impl AsRef<Client>,
     ) -> Result<CompletionStream> {
-        return CompletionStream::create(model, prompt, client).await;
+        return CompletionStream::new(model, prompt, client).await;
     }
 
     /// Creates a completion request builder
@@ -337,14 +337,14 @@ impl<'a> CompletionBuilder<'a> {
             .send()
             .await?;
 
-        return Ok(CompletionStream::new(resp));
+        return Ok(CompletionStream::create(resp));
     }
 }
 
 impl CompletionStream {
     /// Creates a completion for the provided prompt and parameters
     #[inline]
-    pub async fn create(
+    pub async fn new(
         model: impl AsRef<str>,
         prompt: impl Into<String>,
         client: impl AsRef<Client>,
@@ -356,7 +356,7 @@ impl CompletionStream {
     }
 
     #[inline]
-    fn new(resp: Response) -> Self {
+    fn create(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
         };
