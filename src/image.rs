@@ -1,9 +1,8 @@
-use crate::error_to_io_error;
-
 use super::{
     common::StreamTokioAsyncRead,
     error::{Error, Result},
 };
+use crate::error_to_io_error;
 use base64::Engine;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -61,9 +60,9 @@ pub enum ResponseFormat {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Data {
-    Url(Arc<str>),
+    Url(String),
     #[serde(rename = "b64_json")]
-    B64Json(Arc<str>),
+    B64Json(Arc<String>),
 }
 
 impl Images {

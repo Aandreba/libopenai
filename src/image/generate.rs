@@ -1,9 +1,8 @@
 use super::{Images, ResponseFormat, Size};
 use crate::{
     error::{BuilderError, Error, FallibleResponse, Result},
-    Str,
+    Client, Str,
 };
-use reqwest::Client;
 use serde::Serialize;
 use std::ops::RangeInclusive;
 
@@ -22,10 +21,8 @@ pub struct Builder<'a> {
 
 impl Images {
     #[inline]
-    pub async fn new(prompt: impl AsRef<str>, api_key: impl AsRef<str>) -> Result<Self> {
-        return Self::generate(prompt.as_ref())?
-            .build(api_key.as_ref())
-            .await;
+    pub async fn new(prompt: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
+        return Self::generate(prompt.as_ref())?.build(client).await;
     }
 
     #[inline]
@@ -84,11 +81,10 @@ impl<'a> Builder<'a> {
         self
     }
 
-    pub async fn build(self, api_key: &str) -> Result<Images> {
-        let client = Client::new();
+    pub async fn build(self, client: impl AsRef<Client>) -> Result<Images> {
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/images/generations")
-            .bearer_auth(api_key)
             .json(&self)
             .send()
             .await?
