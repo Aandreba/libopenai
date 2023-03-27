@@ -5,11 +5,11 @@ use super::{
 };
 use crate::{
     error::{Error, FallibleResponse, OpenAiError},
-    trim_ascii_start,
+    trim_ascii_start, Client,
 };
 use chrono::{DateTime, Utc};
 use futures::{ready, Stream, TryStreamExt};
-use reqwest::{Client, Response};
+use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, future::ready, ops::RangeInclusive, pin::Pin};
 
@@ -121,9 +121,9 @@ impl Completion {
     pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Self> {
-        return Self::builder(model, messages).build(api_key.as_ref()).await;
+        return Self::builder(model, messages).build(client).await;
     }
 
     /// Creates a completion for the chat message
@@ -131,9 +131,9 @@ impl Completion {
     pub async fn create_stream<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<CompletionStream> {
-        return CompletionStream::create(model, messages, api_key).await;
+        return CompletionStream::create(model, messages, client).await;
     }
 
     /// Creates a new chat completion request builder
@@ -294,11 +294,10 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the request
-    pub async fn build(self, api_key: &str) -> Result<Completion> {
-        let client = Client::new();
+    pub async fn build(self, client: impl AsRef<Client>) -> Result<Completion> {
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/chat/completions")
-            .bearer_auth(api_key)
             .json(&self)
             .send()
             .await?
@@ -310,12 +309,11 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the stream request
-    pub async fn build_stream(mut self, api_key: &str) -> Result<CompletionStream> {
+    pub async fn build_stream(mut self, client: impl AsRef<Client>) -> Result<CompletionStream> {
         self.stream = true;
-        let client = Client::new();
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/chat/completions")
-            .bearer_auth(api_key)
             .json(&self)
             .send()
             .await?;
@@ -330,10 +328,10 @@ impl CompletionStream {
     pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Self> {
         return Completion::builder(model, messages)
-            .build_stream(api_key.as_ref())
+            .build_stream(client)
             .await;
     }
 

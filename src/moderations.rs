@@ -1,7 +1,8 @@
 use super::error::Result;
 use crate::{error::FallibleResponse, Client};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
+/// Given a input text, outputs if the model classifies it as violating OpenAI's content policy.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Moderation {
     pub id: String,
@@ -32,18 +33,26 @@ pub struct Categories<T> {
 }
 
 impl Moderation {
+    /// Classifies if text violates OpenAI's Content Policy
     pub async fn new(
         input: impl AsRef<str>,
         model: Option<&str>,
         client: impl AsRef<Client>,
     ) -> Result<Self> {
+        #[derive(Debug, Serialize)]
+        struct Body<'a> {
+            input: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            model: Option<&'a str>,
+        }
+
         let resp = client
             .as_ref()
             .post("https://api.openai.com/v1/moderations")
-            .json(&serde_json::json! {{
-                "input": input.as_ref(),
-                "model": model
-            }})
+            .json(&Body {
+                input: input.as_ref(),
+                model,
+            })
             .send()
             .await?
             .json::<FallibleResponse<Self>>()

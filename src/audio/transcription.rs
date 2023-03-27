@@ -1,13 +1,16 @@
 use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 
 use super::ResponseFormat;
-use crate::error::{BuilderError, Error, OpenAiError, Result};
+use crate::{
+    error::{BuilderError, Error, OpenAiError, Result},
+    Client,
+};
 use bytes::Bytes;
 use futures::TryStream;
 use rand::random;
 use reqwest::{
     multipart::{Form, Part},
-    Body, Client,
+    Body,
 };
 use serde::Deserialize;
 use tokio_util::io::ReaderStream;
@@ -63,7 +66,7 @@ impl Transcription {
     pub async fn with_file(
         self,
         image: impl AsRef<Path>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<String> {
         let image = image.as_ref();
         let name = image
@@ -75,20 +78,20 @@ impl Transcription {
         let image = Body::from(tokio::fs::File::open(image).await?);
         let image = Part::stream(Body::from(image)).file_name(name);
 
-        return self.with_part(image, api_key).await;
+        return self.with_part(image, client).await;
     }
 
     pub async fn with_tokio_reader<I>(
         self,
         image: I,
         extension: impl AsRef<str>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<String>
     where
         I: 'static + Send + Sync + tokio::io::AsyncRead,
     {
         return self
-            .with_stream(ReaderStream::new(image), extension, api_key)
+            .with_stream(ReaderStream::new(image), extension, client)
             .await;
     }
 
@@ -96,7 +99,7 @@ impl Transcription {
         self,
         image: I,
         extension: impl AsRef<str>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<String>
     where
         I: TryStream + Send + Sync + 'static,
@@ -104,7 +107,7 @@ impl Transcription {
         Bytes: From<I::Ok>,
     {
         return self
-            .with_body(Body::wrap_stream(image), extension, api_key)
+            .with_body(Body::wrap_stream(image), extension, client)
             .await;
     }
 
@@ -112,19 +115,17 @@ impl Transcription {
         self,
         file: impl Into<Body>,
         extension: impl AsRef<str>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<String> {
         return self
             .with_part(
                 Part::stream(file).file_name(format!("{}.{}", random::<u64>(), extension.as_ref())),
-                api_key,
+                client,
             )
             .await;
     }
 
-    pub async fn with_part(self, file: Part, api_key: impl AsRef<str>) -> Result<String> {
-        let client = Client::new();
-
+    pub async fn with_part(self, file: Part, client: impl AsRef<Client>) -> Result<String> {
         let mut body = Form::new().text("model", "whisper-1").part("file", file);
 
         if let Some(prompt) = self.prompt {
@@ -147,8 +148,8 @@ impl Transcription {
         }
 
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/audio/transcriptions")
-            .bearer_auth(api_key.as_ref())
             .multipart(body)
             .send()
             .await?

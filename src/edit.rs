@@ -37,7 +37,7 @@ impl Edit {
         model: impl AsRef<str>,
         input: impl AsRef<str>,
         instruction: impl AsRef<str>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Self> {
         return Self::builder(model.as_ref(), instruction.as_ref())
             .input(input.as_ref())

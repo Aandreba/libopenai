@@ -17,6 +17,7 @@ pub struct Model {
     pub parent: Option<String>,
 }
 
+/// Permissions granted to a [`Model`]
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Permission {
