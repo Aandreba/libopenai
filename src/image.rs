@@ -24,8 +24,11 @@ use std::{
 use tokio::task::spawn_blocking;
 use tokio_util::io::StreamReader;
 
+/// Creates an edited or extended image given an original image and a prompt.
 pub mod edit;
+/// Creates an image given a prompt.
 pub mod generate;
+/// Creates a variation of a given image.
 pub mod variation;
 
 /// Result from an images request

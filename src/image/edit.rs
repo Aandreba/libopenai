@@ -17,7 +17,7 @@ use tokio_util::io::ReaderStream;
 #[derive(Debug, Clone)]
 pub struct ImageEditBuilder {
     prompt: String,
-    n: Option<u32>,
+    n: Option<u64>,
     size: Option<Size>,
     response_format: Option<ResponseFormat>,
     user: Option<String>,
@@ -50,8 +50,8 @@ impl ImageEditBuilder {
 
     /// The number of images to generate. Must be between 1 and 10.
     #[inline]
-    pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
-        const RANGE: RangeInclusive<u32> = 1..=10;
+    pub fn n(mut self, n: u64) -> Result<Self, BuilderError<Self>> {
+        const RANGE: RangeInclusive<u64> = 1..=10;
         return match RANGE.contains(&n) {
             true => {
                 self.n = Some(n);

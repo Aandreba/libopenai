@@ -8,15 +8,25 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 
 pub(crate) type Str<'a> = Cow<'a, str>;
 
+/// Learn how to turn audio into text.
 pub mod audio;
+/// Given a chat conversation, the model will return a chat completion response.
 pub mod chat;
+/// Structures and methods commonly used throughout the library
 pub mod common;
+/// Given a prompt, the model will return one or more predicted completions, and can also return the probabilities of alternative tokens at each position.
 pub mod completion;
+/// Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.
 pub mod embeddings;
+/// Library's error types
 pub mod error;
+/// Files are used to upload documents that can be used with features like fine-tuning.
 pub mod file;
+/// Given a prompt and/or an input image, the model will generate a new image.
 pub mod image;
+/// List and describe the various models available in the API.
 pub mod model;
+/// Given a input text, outputs if the model classifies it as violating OpenAI's content policy.
 pub mod moderations;
 // pub mod edit;
 //pub mod finetune;

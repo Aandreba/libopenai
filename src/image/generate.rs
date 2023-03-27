@@ -10,7 +10,7 @@ use std::ops::RangeInclusive;
 pub struct GenerateBuilder<'a> {
     prompt: Str<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    n: Option<u32>,
+    n: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<Size>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -52,8 +52,8 @@ impl<'a> GenerateBuilder<'a> {
 
     /// The number of images to generate. Must be between 1 and 10.
     #[inline]
-    pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
-        const RANGE: RangeInclusive<u32> = 1..=10;
+    pub fn n(mut self, n: u64) -> Result<Self, BuilderError<Self>> {
+        const RANGE: RangeInclusive<u64> = 1..=10;
         return match RANGE.contains(&n) {
             true => {
                 self.n = Some(n);

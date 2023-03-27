@@ -34,9 +34,7 @@ pub struct Message<'a> {
 #[non_exhaustive]
 pub struct ChatChoice {
     pub message: Message<'static>,
-    pub index: u32,
-    #[serde(default)]
-    pub lobprogs: Option<Vec<serde_json::Value>>,
+    pub index: u64,
     #[serde(default)]
     pub finish_reason: Option<String>,
 }
@@ -60,20 +58,20 @@ pub struct ChatCompletionStream {
     inner: Pin<Box<dyn Stream<Item = reqwest::Result<bytes::Bytes>>>>,
 }
 
-/// [`Completion`]/[`CompletionStream`] request builder
+/// [`ChatCompletion`]/[`ChatCompletionBuilder`] request builder
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatCompletionBuilder<'a> {
     model: Str<'a>,
     messages: Vec<Message<'a>>,
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    max_tokens: Option<u32>,
+    max_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     top_p: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    n: Option<u32>,
+    n: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<Str<'a>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -147,13 +145,13 @@ impl ChatCompletion {
 }
 
 impl ChatCompletion {
-    /// Returns a reference to the first [`Choice`]
+    /// Returns a reference to the first [`ChatChoice`]
     #[inline]
     pub fn first(&self) -> Option<&ChatChoice> {
         return self.choices.first();
     }
 
-    /// Returns the first [`Choice`]
+    /// Returns the first [`ChatChoice`]
     #[inline]
     pub fn into_first(self) -> Option<ChatChoice> {
         return self.choices.into_iter().next();
@@ -185,7 +183,7 @@ impl<'a> ChatCompletionBuilder<'a> {
     /// The maximum number of tokens to generate in the chat completion.
     ///
     /// The total length of input tokens and generated tokens is limited by the model's context length.
-    pub fn max_tokens(mut self, max_tokens: u32) -> Self {
+    pub fn max_tokens(mut self, max_tokens: u64) -> Self {
         self.max_tokens = Some(max_tokens);
         self
     }
@@ -216,7 +214,7 @@ impl<'a> ChatCompletionBuilder<'a> {
     }
 
     /// How many chat completion choices to generate for each input message.
-    pub fn n(mut self, n: u32) -> Self {
+    pub fn n(mut self, n: u64) -> Self {
         self.n = Some(n);
         self
     }

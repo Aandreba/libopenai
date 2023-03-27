@@ -50,6 +50,7 @@ pub struct OpenAiError {
 }
 
 impl Error {
+    /// Creates a generic error with a custom message
     #[inline]
     pub fn msg<M: Display + Debug + Send + Sync + 'static>(msg: M) -> Self {
         Self::Other(anyhow::Error::msg(msg))
@@ -76,11 +77,13 @@ impl<T> BuilderError<T> {
         };
     }
 
+    /// Returns the inner builder
     #[inline]
     pub fn into_inner(self) -> T {
         self.builder
     }
 
+    /// Returns the inner error
     #[inline]
     pub fn into_error(self) -> Error {
         self.err

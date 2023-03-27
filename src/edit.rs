@@ -26,7 +26,7 @@ pub struct Builder<'a> {
     model: Str<'a>,
     instruction: Str<'a>,
     input: Option<Str<'a>>,
-    n: Option<u32>,
+    n: Option<u64>,
     temperature: Option<f64>,
     top_p: Option<f64>,
 }
@@ -68,7 +68,7 @@ impl<'a> Builder<'a> {
         self
     }
 
-    pub fn n(mut self, n: u32) -> Self {
+    pub fn n(mut self, n: u64) -> Self {
         self.n = Some(n);
         self
     }

@@ -4,6 +4,7 @@ use super::{
     Str,
 };
 use crate::{
+    common::Logprobs,
     error::{Error, FallibleResponse, OpenAiError},
     trim_ascii_start, Client,
 };
@@ -17,9 +18,9 @@ use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive, pin::Pin};
 #[non_exhaustive]
 pub struct Choice {
     pub text: String,
-    pub index: u32,
+    pub index: u64,
     #[serde(default)]
-    pub lobprogs: Option<Vec<serde_json::Value>>,
+    pub logprobs: Option<Logprobs>,
     #[serde(default)]
     pub finish_reason: Option<String>,
 }
@@ -53,15 +54,15 @@ pub struct CompletionBuilder<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     suffix: Option<Str<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    max_tokens: Option<u32>,
+    max_tokens: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     top_p: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    n: Option<u32>,
+    n: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    logprobs: Option<u32>,
+    logprobs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     echo: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,7 +72,7 @@ pub struct CompletionBuilder<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     presence_penalty: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    best_of: Option<u32>,
+    best_of: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     logit_bias: Option<HashMap<Str<'a>, f64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -166,7 +167,7 @@ impl<'a> CompletionBuilder<'a> {
     /// The maximum number of tokens to generate in the completion.
     ///
     /// The token count of your prompt plus `max_tokens` cannot exceed the model's context length. Most models have a context length of 2048 tokens (except for the newest models, which support 4096).
-    pub fn max_tokens(mut self, max_tokens: u32) -> Self {
+    pub fn max_tokens(mut self, max_tokens: u64) -> Self {
         self.max_tokens = Some(max_tokens);
         self
     }
@@ -199,7 +200,7 @@ impl<'a> CompletionBuilder<'a> {
     /// How many completions to generate for each prompt.
     ///
     /// > **Note**: Because this parameter generates many completions, it can quickly consume your token quota. Use carefully and ensure that you have reasonable settings for `max_tokens` and `stop`.
-    pub fn n(mut self, n: u32) -> Self {
+    pub fn n(mut self, n: u64) -> Self {
         self.n = Some(n);
         self
     }
@@ -207,8 +208,8 @@ impl<'a> CompletionBuilder<'a> {
     /// Include the log probabilities on the logprobs most likely tokens, as well the chosen tokens. For example, if logprobs is 5, the API will return a list of the 5 most likely tokens. The API will always return the logprob of the sampled token, so there may be up to logprobs+1 elements in the response.
     ///
     /// The maximum value for logprobs is 5.
-    pub fn logprobs(mut self, logprobs: u32) -> Result<Self, BuilderError<Self>> {
-        const MAX: u32 = 5;
+    pub fn logprobs(mut self, logprobs: u64) -> Result<Self, BuilderError<Self>> {
+        const MAX: u64 = 5;
         match logprobs > MAX {
             true => Err(BuilderError::msg(
                 self,
@@ -286,7 +287,7 @@ impl<'a> CompletionBuilder<'a> {
     /// When used with `n`, `best_of` controls the number of candidate completions and `n` specifies how many to return – `best_of` must be greater than `n`.
     ///
     /// > **Note**: Because this parameter generates many completions, it can quickly consume your token quota. Use carefully and ensure that you have reasonable settings for `max_tokens` and `stop`.
-    pub fn best_of(mut self, best_of: u32) -> Self {
+    pub fn best_of(mut self, best_of: u64) -> Self {
         self.best_of = Some(best_of);
         self
     }

@@ -32,7 +32,6 @@ pub struct Permission {
     pub allow_view: bool,
     pub allow_fine_tuning: bool,
     pub organization: String,
-    pub group: serde_json::Value,
     pub is_blocking: bool,
 }
 
