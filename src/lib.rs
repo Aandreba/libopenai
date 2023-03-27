@@ -27,17 +27,19 @@ pub mod prelude {
     pub use audio::transcription::TranscriptionBuilder;
     pub use audio::translation::TranslationBuilder;
 
-    pub type ChatCompletion = chat::ChatCompletion;
-    pub type ChatCompletionStream = chat::ChatCompletionStream;
+    pub use chat::ChatCompletion;
+    pub use chat::ChatCompletionStream;
     pub use chat::Message;
 
-    pub use completion::Choice;
-    pub use completion::Completion;
-    pub use completion::CompletionStream;
+    pub use completion::{Choice, Completion, CompletionStream};
 
     // pub use edit::Edit;
 
+    pub use embeddings::{Embedding, EmbeddingResult};
+
     pub use error::Error;
+
+    pub use file::File;
 
     pub use super::image::Data;
     pub use super::image::Images;
@@ -48,15 +50,22 @@ pub mod prelude {
     pub use moderations::Moderation;
 }
 
+/// A client that's used to connect to the OpenAI API
 #[derive(Debug, Clone)]
 pub struct Client(reqwest::Client);
 
 impl Client {
+    /// Creates a new client with a default [`reqwest::Client`].
+    ///
+    /// If `api_key` is `None`, the key will be taken from the enviroment variable `OPENAI_API_KEY`
     #[inline]
     pub fn new(api_key: Option<&str>) -> Result<Self> {
         Self::from_builder(Default::default(), api_key)
     }
 
+    /// Creates a new client with the specified [`reqwest::ClientBuilder`].
+    ///
+    /// If `api_key` is `None`, the key will be taken from the enviroment variable `OPENAI_API_KEY`
     pub fn from_builder(builder: reqwest::ClientBuilder, api_key: Option<&str>) -> Result<Self> {
         let api_key = match api_key {
             Some(x) => Str::Borrowed(x),
