@@ -1,5 +1,6 @@
 use super::error::Result;
 use crate::{error::FallibleResponse, Client};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 /// OpenAI module. Each module has different capabilities and price points.
@@ -9,7 +10,29 @@ pub struct Model {
     pub id: String,
     pub object: String,
     pub owned_by: String,
-    pub permission: Vec<serde_json::Value>,
+    pub permission: Vec<Permission>,
+    #[serde(default)]
+    pub root: Option<String>,
+    #[serde(default)]
+    pub parent: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[non_exhaustive]
+pub struct Permission {
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub created_at: DateTime<Utc>,
+    pub id: String,
+    pub object: String,
+    pub allow_create_engine: bool,
+    pub allow_sampling: bool,
+    pub allow_lobprobs: bool,
+    pub allow_search_indices: bool,
+    pub allow_view: bool,
+    pub allow_fine_tuning: bool,
+    pub organization: String,
+    pub group: serde_json::Value,
+    pub is_blocking: bool,
 }
 
 impl Model {

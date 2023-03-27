@@ -1,9 +1,10 @@
-use libopenai::{file::File, Client};
+use libopenai::{finetune::data::TrainingData, Client};
 
 #[tokio::test]
 async fn fine() -> anyhow::Result<()> {
-    let client = Client::new(dotenv::var("API_KEY").ok().as_deref())?;
-    let file = File::retreive("test", &client).await;
-    println!("{file:?}");
+    let client = Client::new(None)?;
+    let data =
+        TrainingData::builder().save_iter([TrainingData::new("sqrt", "square root")], client);
+
     return Ok(());
 }

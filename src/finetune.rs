@@ -6,6 +6,8 @@ use crate::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod data;
+
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct FineTune {
@@ -71,6 +73,18 @@ pub struct Builder<'a> {
     classification_betas: Option<Vec<f64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     suffix: Option<Str<'a>>,
+}
+
+impl FineTune {
+    #[inline]
+    pub async fn new(training_file: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
+        return Self::builder(training_file.as_ref()).build(client).await;
+    }
+
+    #[inline]
+    pub fn builder<'a>(training_file: impl Into<Str<'a>>) -> Builder<'a> {
+        return Builder::new(training_file);
+    }
 }
 
 impl<'a> Builder<'a> {
