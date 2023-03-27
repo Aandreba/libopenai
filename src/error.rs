@@ -10,7 +10,7 @@ pub struct BuilderError<T> {
     pub err: Error,
 }
 
-// An error of the `libopenai` library
+/// An error of the `libopenai` library
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("OpenAI error: {0}")]
@@ -100,10 +100,10 @@ impl<T> FallibleResponse<T> {
     }
 }
 
-impl<T> Into<Error> for BuilderError<T> {
+impl<T> From<BuilderError<T>> for Error {
     #[inline]
-    fn into(self) -> Error {
-        self.into_error()
+    fn from(value: BuilderError<T>) -> Self {
+        value.into_error()
     }
 }
 

@@ -4,7 +4,6 @@ use super::{
     Str,
 };
 use crate::{
-    common::Logprobs,
     error::{Error, FallibleResponse, OpenAiError},
     trim_ascii_start, Client,
 };
@@ -23,6 +22,15 @@ pub struct Choice {
     pub logprobs: Option<Logprobs>,
     #[serde(default)]
     pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[non_exhaustive]
+pub struct Logprobs {
+    pub tokens: Vec<String>,
+    pub token_logprobs: Vec<f64>,
+    pub top_logprobs: Vec<HashMap<String, f64>>,
+    pub text_offset: Vec<u64>,
 }
 
 /// Given a prompt, the model will return one or more predicted completions, and can also return the probabilities of alternative tokens at each position.

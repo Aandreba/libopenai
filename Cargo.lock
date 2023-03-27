@@ -234,6 +234,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "docfg"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a253819a37a8a195127445cc937925131d517f4da70dd8b3314abb00d6297071"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "dotenv"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -697,6 +708,7 @@ dependencies = [
  "base64",
  "bytes",
  "chrono",
+ "docfg",
  "dotenv",
  "elor",
  "futures",

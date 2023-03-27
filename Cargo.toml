@@ -5,11 +5,16 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 anyhow = "1.0.69"
 base64 = "0.21.0"
 bytes = "1.4.0"
 chrono = { version = "0.4.23", features = ["serde"] }
+docfg = "0.1.0"
 dotenv = "0.15.0"
 elor = { version = "1.1.4", features = ["async"] }
 futures = "0.3.27"

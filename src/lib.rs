@@ -1,10 +1,11 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
+use error::{Error, Result};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use std::{
     borrow::Cow,
     ops::{Deref, DerefMut},
 };
-
-use error::{Error, Result};
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 
 pub(crate) type Str<'a> = Cow<'a, str>;
 
