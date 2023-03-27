@@ -1,3 +1,5 @@
+use crate::error_to_io_error;
+
 use super::{
     common::StreamTokioAsyncRead,
     error::{Error, Result},
@@ -138,28 +140,12 @@ impl Data {
     }
 
     pub async fn into_futures_reader(self) -> Result<impl futures::io::AsyncBufRead> {
-        let stream = self.into_stream().await?.map_err(|e| match e {
-            Error::Io(e) => e,
-            Error::Other(e) => match e.downcast::<std::io::Error>() {
-                Ok(e) => e,
-                Err(other) => std::io::Error::new(std::io::ErrorKind::Other, other),
-            },
-            other => std::io::Error::new(std::io::ErrorKind::Other, other),
-        });
-
+        let stream = self.into_stream().await?.map_err(error_to_io_error);
         return Ok(stream.into_async_read());
     }
 
     pub async fn into_tokio_reader(self) -> Result<impl tokio::io::AsyncBufRead> {
-        let stream = self.into_stream().await?.map_err(|e| match e {
-            Error::Io(e) => e,
-            Error::Other(e) => match e.downcast::<std::io::Error>() {
-                Ok(e) => e,
-                Err(other) => std::io::Error::new(std::io::ErrorKind::Other, other),
-            },
-            other => std::io::Error::new(std::io::ErrorKind::Other, other),
-        });
-
+        let stream = self.into_stream().await?.map_err(error_to_io_error);
         return Ok(StreamTokioAsyncRead::new(stream));
     }
 

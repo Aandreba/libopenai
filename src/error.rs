@@ -15,6 +15,8 @@ pub struct BuilderError<T> {
 pub enum Error {
     #[error("OpenAI error: {0}")]
     OpenAI(#[from] OpenAiError),
+    #[error("Enviroment error: {0}")]
+    Env(#[from] std::env::VarError),
     #[error("Reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("JSON error: {0}")]

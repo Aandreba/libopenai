@@ -4,7 +4,7 @@ use std::{
 };
 
 use error::{Error, Result};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 
 pub(crate) type Str<'a> = Cow<'a, str>;
 
@@ -52,12 +52,17 @@ pub struct Client(reqwest::Client);
 
 impl Client {
     #[inline]
-    pub fn new(api_key: impl AsRef<str>) -> Result<Self> {
+    pub fn new(api_key: Option<&str>) -> Result<Self> {
         Self::from_builder(Default::default(), api_key)
     }
 
-    pub fn from_builder(builder: reqwest::ClientBuilder, api_key: impl AsRef<str>) -> Result<Self> {
-        let mut bearer = HeaderValue::try_from(format!("Bearer {}", api_key.as_ref()))
+    pub fn from_builder(builder: reqwest::ClientBuilder, api_key: Option<&str>) -> Result<Self> {
+        let api_key = match api_key {
+            Some(x) => Str::Borrowed(x),
+            None => Str::Owned(std::env::var("OPENAI_API_KEY")?),
+        };
+
+        let mut bearer = HeaderValue::try_from(format!("Bearer {api_key}"))
             .map_err(|e| Error::Other(e.into()))?;
         bearer.set_sensitive(true);
 
@@ -118,4 +123,15 @@ pub(crate) fn trim_ascii_end(mut ascii: &[u8]) -> &[u8] {
         }
     }
     return ascii;
+}
+
+pub(crate) fn error_to_io_error(e: Error) -> std::io::Error {
+    match e {
+        Error::Io(e) => e,
+        Error::Other(e) => match e.downcast::<std::io::Error>() {
+            Ok(e) => e,
+            Err(other) => std::io::Error::new(std::io::ErrorKind::Other, other),
+        },
+        other => std::io::Error::new(std::io::ErrorKind::Other, other),
+    }
 }

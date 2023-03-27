@@ -11,10 +11,7 @@ use chrono::{DateTime, Utc};
 use futures::{ready, Stream, TryStreamExt};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow, collections::HashMap, future::ready, hint::unreachable_unchecked,
-    ops::RangeInclusive, pin::Pin,
-};
+use std::{borrow::Cow, collections::HashMap, future::ready, ops::RangeInclusive, pin::Pin};
 
 /// Message role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
