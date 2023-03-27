@@ -24,6 +24,7 @@ pub struct File {
     pub purpose: String,
 }
 
+/// [`delete_file`] result
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Delete {
@@ -47,7 +48,7 @@ impl File {
         return Ok(file);
     }
 
-    /// Returns the contents of the file
+    /// Returns the contents of the file.
     #[inline]
     pub async fn content(&self, client: impl AsRef<Client>) -> Result<Response> {
         return retreive_file_content(&self.id, client).await;

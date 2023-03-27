@@ -97,9 +97,9 @@ impl Completion {
     pub async fn create_stream(
         model: impl AsRef<str>,
         prompt: impl Into<String>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<CompletionStream> {
-        return CompletionStream::create(model, prompt, api_key).await;
+        return CompletionStream::create(model, prompt, client).await;
     }
 
     /// Creates a completion request builder
