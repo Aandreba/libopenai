@@ -1,11 +1,14 @@
 use super::{load_image, Images, ResponseFormat, Size};
-use crate::error::{BuilderError, Error, FallibleResponse, Result};
+use crate::{
+    error::{BuilderError, Error, FallibleResponse, Result},
+    Client,
+};
 use bytes::Bytes;
 use futures::TryStream;
 use rand::random;
 use reqwest::{
     multipart::{Form, Part},
-    Body, Client,
+    Body,
 };
 use std::path::PathBuf;
 use std::{ffi::OsStr, ops::RangeInclusive};
@@ -95,7 +98,7 @@ impl Builder {
         };
 
         let image = Part::stream(image).file_name(name);
-        return self.with_part(image, api_key).await;
+        return self.with_part(image, client).await;
     }
 
     /// Sends the request with the specified file.
@@ -105,7 +108,7 @@ impl Builder {
     where
         I: 'static + Send + Sync + tokio::io::AsyncRead,
     {
-        return self.with_stream(ReaderStream::new(image), api_key).await;
+        return self.with_stream(ReaderStream::new(image), client).await;
     }
 
     /// Sends the request with the specified file.
@@ -115,7 +118,7 @@ impl Builder {
         I::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
         Bytes: From<I::Ok>,
     {
-        return self.with_body(Body::wrap_stream(image), api_key).await;
+        return self.with_body(Body::wrap_stream(image), client).await;
     }
 
     /// Sends the request with the specified file.
@@ -127,15 +130,13 @@ impl Builder {
         return self
             .with_part(
                 Part::stream(image).file_name(format!("{}.png", random::<u64>())),
-                api_key,
+                client,
             )
             .await;
     }
 
     /// Sends the request with the specified file.
     pub async fn with_part(self, image: Part, client: impl AsRef<Client>) -> Result<Images> {
-        let client = Client::new();
-
         let mut body = Form::new().part("image", image);
 
         if let Some(n) = self.n {
@@ -164,8 +165,8 @@ impl Builder {
         }
 
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/images/variations")
-            .bearer_auth(api_key.as_ref())
             .multipart(body)
             .send()
             .await?
