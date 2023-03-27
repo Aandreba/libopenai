@@ -12,13 +12,14 @@ pub mod audio;
 pub mod chat;
 pub mod common;
 pub mod completion;
+pub mod embeddings;
 pub mod error;
-pub mod finetune;
+pub mod file;
 pub mod image;
 pub mod model;
 pub mod moderations;
 // pub mod edit;
-pub mod file;
+//pub mod finetune;
 
 pub mod prelude {
     use super::*;
