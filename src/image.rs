@@ -36,7 +36,7 @@ pub mod variation;
 pub struct Images {
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created: DateTime<Utc>,
-    pub data: Vec<Data>,
+    pub data: Vec<ImageData>,
 }
 
 /// The size of the generated images.
@@ -57,10 +57,11 @@ pub enum Size {
 /// The format in which the generated images are returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ResponseFormat {
+pub enum ImageResponseFormat {
     /// URL that points to an image hosted by OpenAI
     #[default]
     Url,
+
     /// Base64-encoded image data
     #[serde(rename = "b64_json")]
     B64Json,
@@ -69,12 +70,12 @@ pub enum ResponseFormat {
 /// Image data
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Data {
+pub enum ImageData {
     /// URL that points to an image hosted by OpenAI
     Url(String),
     /// Base64-encoded image data
     #[serde(rename = "b64_json")]
-    B64Json(Arc<String>),
+    B64Json(Arc<String>), // avoid making large string copies
 }
 
 impl Images {
@@ -85,14 +86,14 @@ impl Images {
 
         let fut = self.save(|_| {
             let id = rng.sample::<u64, _>(Standard);
-            path.join(format!("{id}")).with_extension("jpg")
+            path.join(format!("{id}")).with_extension("png")
         });
 
         return fut.await;
     }
 
     /// Saves all the images in the response into the path provided for each one by `f`
-    pub async fn save<F: FnMut(&Data) -> PathBuf>(self, mut f: F) -> Result<()> {
+    pub async fn save<F: FnMut(&ImageData) -> PathBuf>(self, mut f: F) -> Result<()> {
         let fut = futures::stream::iter(self.data.into_iter())
             .map(|data| {
                 let path = f(&data);
@@ -116,26 +117,26 @@ impl Images {
     }
 }
 
-impl Data {
+impl ImageData {
     /// Returns the response's value as a [`str`] slice
     #[inline]
     pub fn as_str(&self) -> &str {
         match self {
-            Data::Url(x) => x,
-            Data::B64Json(x) => x,
+            ImageData::Url(x) => x,
+            ImageData::B64Json(x) => x,
         }
     }
 
     /// Returns a bytes [`Stream`](futures::Stream) with the contents of the image
     pub async fn into_stream(self) -> Result<impl TryStream<Ok = Bytes, Error = Error>> {
         let v = match self {
-            Data::Url(url) => Either::Left(
+            ImageData::Url(url) => Either::Left(
                 reqwest::get(url.deref())
                     .await?
                     .bytes_stream()
                     .map_err(Error::from),
             ),
-            Data::B64Json(x) => {
+            ImageData::B64Json(x) => {
                 let fut = async move {
                     match spawn_blocking(move || {
                         base64::engine::general_purpose::STANDARD.decode(x.deref())

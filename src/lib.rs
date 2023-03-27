@@ -2,9 +2,11 @@
 
 use error::{Error, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use serde::{de::Visitor, Deserializer};
 use std::{
     borrow::Cow,
     ops::{Deref, DerefMut},
+    time::Duration,
 };
 
 pub(crate) type Str<'a> = Cow<'a, str>;
@@ -45,7 +47,7 @@ pub mod prelude {
 
     pub use completion::{Choice, Completion, CompletionStream};
 
-    // pub use edit::Edit;
+    pub use edit::Edit;
 
     pub use embeddings::{Embedding, EmbeddingResult};
 
@@ -53,7 +55,7 @@ pub mod prelude {
 
     pub use file::File;
 
-    pub use super::image::Data;
+    pub use super::image::ImageData;
     pub use super::image::Images;
 
     pub use model::models;
@@ -67,29 +69,43 @@ pub mod prelude {
 pub struct Client(reqwest::Client);
 
 impl Client {
-    /// Creates a new client with a default [`reqwest::Client`].
+    /// Creates a new client with a default [`reqwest::Client`] (restricted to HTTPS requests only).
     ///
     /// If `api_key` is `None`, the key will be taken from the enviroment variable `OPENAI_API_KEY`
     #[inline]
-    pub fn new(api_key: Option<&str>) -> Result<Self> {
-        Self::from_builder(Default::default(), api_key)
+    pub fn new(api_key: Option<&str>, organization: Option<&str>) -> Result<Self> {
+        Self::from_builder(
+            reqwest::ClientBuilder::new().https_only(true),
+            api_key,
+            organization,
+        )
     }
 
     /// Creates a new client with the specified [`reqwest::ClientBuilder`].
     ///
     /// If `api_key` is `None`, the key will be taken from the enviroment variable `OPENAI_API_KEY`
-    pub fn from_builder(builder: reqwest::ClientBuilder, api_key: Option<&str>) -> Result<Self> {
+    pub fn from_builder(
+        builder: reqwest::ClientBuilder,
+        api_key: Option<&str>,
+        organization: Option<&str>,
+    ) -> Result<Self> {
         let api_key = match api_key {
             Some(x) => Str::Borrowed(x),
             None => Str::Owned(std::env::var("OPENAI_API_KEY")?),
         };
 
+        let mut headers = HeaderMap::new();
+
         let mut bearer = HeaderValue::try_from(format!("Bearer {api_key}"))
             .map_err(|e| Error::Other(e.into()))?;
         bearer.set_sensitive(true);
-
-        let mut headers = HeaderMap::new();
         headers.append(AUTHORIZATION, bearer);
+
+        if let Some(organization) = organization {
+            let organization =
+                HeaderValue::from_str(organization).map_err(|e| Error::Other(e.into()))?;
+            headers.append("OpenAI-Organization", organization);
+        }
 
         let client = builder.default_headers(headers).build()?;
         return Ok(Self(client));
@@ -156,4 +172,65 @@ pub(crate) fn error_to_io_error(e: Error) -> std::io::Error {
         },
         other => std::io::Error::new(std::io::ErrorKind::Other, other),
     }
+}
+
+pub(crate) mod serde_trim_string {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    #[allow(unused)]
+    #[inline]
+    pub fn serialize<S: Serializer>(this: impl AsRef<str>, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(this.as_ref().trim())
+    }
+
+    #[inline]
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<String, D::Error> {
+        let str = String::deserialize(de)?;
+        let trim = str.trim();
+
+        return match str.len() == trim.len() {
+            true => Ok(str),
+            false => Ok(trim.to_string()),
+        };
+    }
+}
+
+#[inline]
+pub(crate) fn deserialize_duration_secs<'de, D: Deserializer<'de>>(
+    de: D,
+) -> Result<Duration, D::Error> {
+    struct LocalVisitor;
+
+    impl<'a> Visitor<'a> for LocalVisitor {
+        type Value = Duration;
+
+        #[inline]
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "a duration in seconds")
+        }
+
+        #[inline]
+        fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            return Ok(Duration::from_secs(v));
+        }
+
+        fn visit_f32<E>(self, v: f32) -> std::result::Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            return Ok(Duration::from_secs_f32(v));
+        }
+
+        fn visit_f64<E>(self, v: f64) -> std::result::Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            return Ok(Duration::from_secs_f64(v));
+        }
+    }
+
+    de.deserialize_any(LocalVisitor)
 }

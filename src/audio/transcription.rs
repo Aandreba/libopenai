@@ -1,6 +1,6 @@
-use super::ResponseFormat;
+use super::{parse_audio_response, AudioResponse, AudioResponseFormat};
 use crate::{
-    error::{BuilderError, Error, OpenAiError, Result},
+    error::{BuilderError, Error, Result},
     Client,
 };
 use bytes::Bytes;
@@ -10,7 +10,6 @@ use reqwest::{
     multipart::{Form, Part},
     Body,
 };
-use serde::Deserialize;
 use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 use tokio_util::io::ReaderStream;
 
@@ -18,7 +17,7 @@ use tokio_util::io::ReaderStream;
 #[derive(Debug, Clone)]
 pub struct TranscriptionBuilder {
     prompt: Option<String>,
-    response_format: Option<ResponseFormat>,
+    response_format: AudioResponseFormat,
     temperature: Option<f64>,
     language: Option<String>,
 }
@@ -28,7 +27,7 @@ impl TranscriptionBuilder {
     pub fn new() -> Self {
         return Self {
             prompt: None,
-            response_format: None,
+            response_format: AudioResponseFormat::VerboseJson,
             temperature: None,
             language: None,
         };
@@ -41,8 +40,8 @@ impl TranscriptionBuilder {
     }
 
     /// The format of the transcript output
-    pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
-        self.response_format = Some(response_format);
+    pub fn response_format(mut self, response_format: AudioResponseFormat) -> Self {
+        self.response_format = response_format;
         self
     }
 
@@ -72,7 +71,7 @@ impl TranscriptionBuilder {
         self,
         image: impl AsRef<Path>,
         client: impl AsRef<Client>,
-    ) -> Result<String> {
+    ) -> Result<AudioResponse> {
         let image = image.as_ref();
         let name = image
             .file_name()
@@ -92,7 +91,7 @@ impl TranscriptionBuilder {
         image: I,
         extension: impl AsRef<str>,
         client: impl AsRef<Client>,
-    ) -> Result<String>
+    ) -> Result<AudioResponse>
     where
         I: 'static + Send + Sync + tokio::io::AsyncRead,
     {
@@ -107,7 +106,7 @@ impl TranscriptionBuilder {
         image: I,
         extension: impl AsRef<str>,
         client: impl AsRef<Client>,
-    ) -> Result<String>
+    ) -> Result<AudioResponse>
     where
         I: TryStream + Send + Sync + 'static,
         I::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
@@ -124,7 +123,7 @@ impl TranscriptionBuilder {
         file: impl Into<Body>,
         extension: impl AsRef<str>,
         client: impl AsRef<Client>,
-    ) -> Result<String> {
+    ) -> Result<AudioResponse> {
         return self
             .with_part(
                 Part::stream(file).file_name(format!("{}.{}", random::<u64>(), extension.as_ref())),
@@ -134,20 +133,20 @@ impl TranscriptionBuilder {
     }
 
     /// Sends the request with the specified file.
-    pub async fn with_part(self, file: Part, client: impl AsRef<Client>) -> Result<String> {
-        let mut body = Form::new().text("model", "whisper-1").part("file", file);
-
-        if let Some(prompt) = self.prompt {
-            body = body.text("prompt", prompt)
-        }
-        if let Some(response_format) = self.response_format {
-            body = body.text(
+    pub async fn with_part(self, file: Part, client: impl AsRef<Client>) -> Result<AudioResponse> {
+        let mut body = Form::new()
+            .text("model", "whisper-1")
+            .text(
                 "response_format",
-                match serde_json::to_value(&response_format)? {
+                match serde_json::to_value(&self.response_format)? {
                     serde_json::Value::String(x) => x,
                     _ => return Err(Error::msg("Unexpected error")),
                 },
             )
+            .part("file", file);
+
+        if let Some(prompt) = self.prompt {
+            body = body.text("prompt", prompt)
         }
         if let Some(temperature) = self.temperature {
             body = body.text("temperature", format!("{temperature}"))
@@ -161,25 +160,8 @@ impl TranscriptionBuilder {
             .post("https://api.openai.com/v1/audio/transcriptions")
             .multipart(body)
             .send()
-            .await?
-            .bytes()
             .await?;
 
-        if let Ok(err) = serde_json::from_slice::<OpenAiError>(&resp) {
-            return Err(Error::OpenAI(err));
-        }
-
-        return match self.response_format {
-            None | Some(ResponseFormat::Json) => {
-                #[derive(Debug, Deserialize)]
-                struct Body {
-                    text: String,
-                }
-
-                let Body { text } = serde_json::from_slice::<Body>(&resp)?;
-                Ok(text)
-            }
-            Some(_) => todo!(),
-        };
+        return parse_audio_response(resp, self.response_format).await;
     }
 }

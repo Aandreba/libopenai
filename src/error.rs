@@ -27,6 +27,8 @@ pub enum Error {
     Base64(#[from] base64::DecodeError),
     #[error("Image error: {0}")]
     Image(#[from] image::error::ImageError),
+    #[error("Srt error: {0}")]
+    Srt(#[from] srtlib::ParsingError),
     #[error("Unknown error: {0}")]
     Other(#[from] anyhow::Error),
 }
@@ -95,7 +97,11 @@ impl<T> FallibleResponse<T> {
     pub fn into_result(self) -> Result<T, OpenAiError> {
         match self {
             FallibleResponse::Ok(x) => Ok(x),
-            FallibleResponse::Err { error } => Err(error),
+            FallibleResponse::Err { error } => {
+                #[cfg(feature = "tracing")]
+                tracing::error!("OpenAPI error: {error}");
+                Err(error)
+            }
         }
     }
 }
@@ -122,4 +128,9 @@ impl<T> Display for BuilderError<T> {
 }
 
 impl std::error::Error for OpenAiError {}
-impl<T: Debug> std::error::Error for BuilderError<T> {}
+impl<T: Debug> std::error::Error for BuilderError<T> {
+    #[inline]
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.err)
+    }
+}

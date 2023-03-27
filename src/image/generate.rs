@@ -1,4 +1,4 @@
-use super::{Images, ResponseFormat, Size};
+use super::{ImageResponseFormat, Images, Size};
 use crate::{
     error::{BuilderError, Error, FallibleResponse, Result},
     Client, Str,
@@ -14,7 +14,7 @@ pub struct GenerateBuilder<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<Size>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    response_format: Option<ResponseFormat>,
+    response_format: Option<ImageResponseFormat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<Str<'a>>,
 }
@@ -23,12 +23,12 @@ impl Images {
     /// Creates an image given a prompt.
     #[inline]
     pub async fn new(prompt: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
-        return Self::generate(prompt.as_ref())?.build(client).await;
+        return Self::create(prompt.as_ref())?.build(client).await;
     }
 
     /// Creates an image given a prompt.
     #[inline]
-    pub fn generate<'a>(prompt: impl Into<Str<'a>>) -> Result<GenerateBuilder<'a>> {
+    pub fn create<'a>(prompt: impl Into<Str<'a>>) -> Result<GenerateBuilder<'a>> {
         return GenerateBuilder::new(prompt);
     }
 }
@@ -75,7 +75,7 @@ impl<'a> GenerateBuilder<'a> {
 
     /// The format in which the generated images are returned.
     #[inline]
-    pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
+    pub fn response_format(mut self, response_format: ImageResponseFormat) -> Self {
         self.response_format = Some(response_format);
         self
     }
@@ -98,6 +98,9 @@ impl<'a> GenerateBuilder<'a> {
             .json::<FallibleResponse<Images>>()
             .await?
             .into_result()?;
+
+        #[cfg(feature = "tracing")]
+        tracing::info!("Images generated");
 
         return Ok(resp);
     }

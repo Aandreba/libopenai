@@ -16,6 +16,7 @@ use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive, pin::Pin};
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Choice {
+    #[serde(with = "crate::serde_trim_string")]
     pub text: String,
     pub index: u64,
     #[serde(default)]
