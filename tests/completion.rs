@@ -66,9 +66,11 @@ async fn audio() -> Result<()> {
 #[tokio::test]
 async fn image() -> Result<()> {
     dotenv::dotenv().unwrap();
+    tracing_subscriber::fmt::init();
+
     let client = Client::new(None, None)?;
 
-    Images::create("A shark eating yo mama")?
+    Images::create("Nintendo Switch playing The Last of Us")?
         .n(2)?
         .build(&client)
         .await?
