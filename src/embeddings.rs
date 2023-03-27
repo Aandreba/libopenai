@@ -14,10 +14,10 @@ pub struct Embedding {
     pub index: u64,
 }
 
-/// A list of [`Embedding`]
+/// A list of [`Embedding`]s
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
-pub struct Embeddings {
+pub struct EmbeddingResult {
     pub object: String,
     pub data: Vec<Embedding>,
     pub model: String,
@@ -25,32 +25,36 @@ pub struct Embeddings {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Builder<'a> {
+pub struct EmbeddingBuilder<'a> {
     model: Str<'a>,
     input: Str<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<Str<'a>>,
 }
 
-impl Embeddings {
+impl Embedding {
+    /// Creates an embedding vector representing the input text.
     #[inline]
     pub async fn new(
         model: impl AsRef<str>,
         input: impl AsRef<str>,
         client: impl AsRef<Client>,
-    ) -> Result<Self> {
+    ) -> Result<EmbeddingResult> {
         return Self::builder(model.as_ref(), input.as_ref())
             .build(client)
             .await;
     }
 
     #[inline]
-    pub fn builder<'a>(model: impl Into<Str<'a>>, input: impl Into<Str<'a>>) -> Builder<'a> {
-        Builder::new(model, input)
+    pub fn builder<'a>(
+        model: impl Into<Str<'a>>,
+        input: impl Into<Str<'a>>,
+    ) -> EmbeddingBuilder<'a> {
+        EmbeddingBuilder::new(model, input)
     }
 }
 
-impl<'a> Builder<'a> {
+impl<'a> EmbeddingBuilder<'a> {
     #[inline]
     pub fn new(model: impl Into<Str<'a>>, input: impl Into<Str<'a>>) -> Self {
         return Self {
@@ -68,14 +72,14 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the request
-    pub async fn build(self, client: impl AsRef<Client>) -> Result<Embeddings> {
+    pub async fn build(self, client: impl AsRef<Client>) -> Result<EmbeddingResult> {
         let result = client
             .as_ref()
             .post("https://api.openai.com/v1/embeddings")
             .json(&self)
             .send()
             .await?
-            .json::<FallibleResponse<Embeddings>>()
+            .json::<FallibleResponse<EmbeddingResult>>()
             .await?
             .into_result()?;
 

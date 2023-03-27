@@ -15,7 +15,7 @@ use tokio::task::spawn_blocking;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
-pub struct Builder {
+pub struct ImageEditBuilder {
     prompt: String,
     n: Option<u32>,
     size: Option<Size>,
@@ -26,12 +26,12 @@ pub struct Builder {
 impl Images {
     /// Creates an edited or extended image given an original image and a prompt.
     #[inline]
-    pub fn edit(prompt: impl Into<String>) -> Result<Builder> {
-        return Builder::new(prompt);
+    pub fn edit(prompt: impl Into<String>) -> Result<ImageEditBuilder> {
+        return ImageEditBuilder::new(prompt);
     }
 }
 
-impl Builder {
+impl ImageEditBuilder {
     #[inline]
     pub fn new(prompt: impl Into<String>) -> Result<Self> {
         let prompt: String = prompt.into();

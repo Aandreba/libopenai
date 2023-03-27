@@ -24,11 +24,11 @@ pub mod moderations;
 pub mod prelude {
     use super::*;
 
-    pub use audio::transcription::Transcription;
-    pub use audio::translation::Translation;
+    pub use audio::transcription::TranscriptionBuilder;
+    pub use audio::translation::TranslationBuilder;
 
-    pub type ChatCompletion = chat::Completion;
-    pub type ChatCompletionStream = chat::CompletionStream;
+    pub type ChatCompletion = chat::ChatCompletion;
+    pub type ChatCompletionStream = chat::ChatCompletionStream;
     pub use chat::Message;
 
     pub use completion::Choice;

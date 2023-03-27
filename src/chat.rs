@@ -32,7 +32,7 @@ pub struct Message<'a> {
 
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
-pub struct Choice {
+pub struct ChatChoice {
     pub message: Message<'static>,
     pub index: u32,
     #[serde(default)]
@@ -44,25 +44,25 @@ pub struct Choice {
 /// Given a chat conversation, the model will return a chat completion response.
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
-pub struct Completion {
+pub struct ChatCompletion {
     pub id: String,
     pub object: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created: DateTime<Utc>,
     pub model: String,
-    pub choices: Vec<Choice>,
+    pub choices: Vec<ChatChoice>,
     #[serde(default)]
     pub usage: Option<Usage>,
 }
 
 /// Given a chat conversation, the model will return a chat completion response.
-pub struct CompletionStream {
+pub struct ChatCompletionStream {
     inner: Pin<Box<dyn Stream<Item = reqwest::Result<bytes::Bytes>>>>,
 }
 
 /// [`Completion`]/[`CompletionStream`] request builder
 #[derive(Debug, Clone, Serialize)]
-pub struct Builder<'a> {
+pub struct ChatCompletionBuilder<'a> {
     model: Str<'a>,
     messages: Vec<Message<'a>>,
     stream: bool,
@@ -115,7 +115,7 @@ impl<'a> Message<'a> {
     }
 }
 
-impl Completion {
+impl ChatCompletion {
     /// Creates a completion for the chat message
     #[inline]
     pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
@@ -132,8 +132,8 @@ impl Completion {
         model: impl Into<Str<'a>>,
         messages: I,
         client: impl AsRef<Client>,
-    ) -> Result<CompletionStream> {
-        return CompletionStream::create(model, messages, client).await;
+    ) -> Result<ChatCompletionStream> {
+        return ChatCompletionStream::create(model, messages, client).await;
     }
 
     /// Creates a new chat completion request builder
@@ -141,26 +141,26 @@ impl Completion {
     pub fn builder<'a, I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Str<'a>>,
         messages: I,
-    ) -> Builder<'a> {
-        return Builder::new(model, messages);
+    ) -> ChatCompletionBuilder<'a> {
+        return ChatCompletionBuilder::new(model, messages);
     }
 }
 
-impl Completion {
+impl ChatCompletion {
     /// Returns a reference to the first [`Choice`]
     #[inline]
-    pub fn first(&self) -> Option<&Choice> {
+    pub fn first(&self) -> Option<&ChatChoice> {
         return self.choices.first();
     }
 
     /// Returns the first [`Choice`]
     #[inline]
-    pub fn into_first(self) -> Option<Choice> {
+    pub fn into_first(self) -> Option<ChatChoice> {
         return self.choices.into_iter().next();
     }
 }
 
-impl<'a> Builder<'a> {
+impl<'a> ChatCompletionBuilder<'a> {
     /// Creates a new chat completion request builder
     pub fn new<I: IntoIterator<Item = Message<'a>>>(
         model: impl Into<Cow<'a, str>>,
@@ -294,14 +294,14 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the request
-    pub async fn build(self, client: impl AsRef<Client>) -> Result<Completion> {
+    pub async fn build(self, client: impl AsRef<Client>) -> Result<ChatCompletion> {
         let resp = client
             .as_ref()
             .post("https://api.openai.com/v1/chat/completions")
             .json(&self)
             .send()
             .await?
-            .json::<FallibleResponse<Completion>>()
+            .json::<FallibleResponse<ChatCompletion>>()
             .await?
             .into_result()?;
 
@@ -309,7 +309,10 @@ impl<'a> Builder<'a> {
     }
 
     /// Sends the stream request
-    pub async fn build_stream(mut self, client: impl AsRef<Client>) -> Result<CompletionStream> {
+    pub async fn build_stream(
+        mut self,
+        client: impl AsRef<Client>,
+    ) -> Result<ChatCompletionStream> {
         self.stream = true;
         let resp = client
             .as_ref()
@@ -318,11 +321,11 @@ impl<'a> Builder<'a> {
             .send()
             .await?;
 
-        return Ok(CompletionStream::new(resp));
+        return Ok(ChatCompletionStream::new(resp));
     }
 }
 
-impl CompletionStream {
+impl ChatCompletionStream {
     /// Creates a new edit for the provided input, instruction, and parameters.
     #[inline]
     pub async fn create<'a, I: IntoIterator<Item = Message<'a>>>(
@@ -330,7 +333,7 @@ impl CompletionStream {
         messages: I,
         client: impl AsRef<Client>,
     ) -> Result<Self> {
-        return Completion::builder(model, messages)
+        return ChatCompletion::builder(model, messages)
             .build_stream(client)
             .await;
     }
@@ -343,7 +346,7 @@ impl CompletionStream {
     }
 }
 
-impl CompletionStream {
+impl ChatCompletionStream {
     /// Converts [`Stream<Item = Result<Completion>>`] into [`Stream<Item = Result<Message<'static>>>`]
     pub fn into_message_stream(self) -> impl Stream<Item = Result<Message<'static>>> {
         return self
@@ -359,8 +362,8 @@ impl CompletionStream {
     }
 }
 
-impl Stream for CompletionStream {
-    type Item = Result<Completion>; // Result<Completion>
+impl Stream for ChatCompletionStream {
+    type Item = Result<ChatCompletion>; // Result<Completion>
 
     #[inline]
     fn poll_next(
@@ -387,7 +390,7 @@ impl Stream for CompletionStream {
                     return std::task::Poll::Ready(None);
                 }
 
-                let json = serde_json::from_slice::<Completion>(x)?;
+                let json = serde_json::from_slice::<ChatCompletion>(x)?;
                 return std::task::Poll::Ready(Some(Ok(json)));
             }
             Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),

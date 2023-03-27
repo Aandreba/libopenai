@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::ops::RangeInclusive;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Builder<'a> {
+pub struct GenerateBuilder<'a> {
     prompt: Str<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     n: Option<u32>,
@@ -28,12 +28,12 @@ impl Images {
 
     /// Creates an image given a prompt.
     #[inline]
-    pub fn generate<'a>(prompt: impl Into<Str<'a>>) -> Result<Builder<'a>> {
-        return Builder::new(prompt);
+    pub fn generate<'a>(prompt: impl Into<Str<'a>>) -> Result<GenerateBuilder<'a>> {
+        return GenerateBuilder::new(prompt);
     }
 }
 
-impl<'a> Builder<'a> {
+impl<'a> GenerateBuilder<'a> {
     #[inline]
     pub fn new(prompt: impl Into<Str<'a>>) -> Result<Self> {
         let prompt: Str<'a> = prompt.into();

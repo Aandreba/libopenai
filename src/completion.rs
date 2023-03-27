@@ -45,7 +45,7 @@ pub struct CompletionStream {
 
 /// [`Completion`]/[`CompletionStream`] request builder
 #[derive(Debug, Clone, Serialize)]
-pub struct Builder<'a> {
+pub struct CompletionBuilder<'a> {
     model: Str<'a>,
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -104,8 +104,8 @@ impl Completion {
 
     /// Creates a completion request builder
     #[inline]
-    pub fn builder<'a>(model: impl Into<Str<'a>>) -> Builder<'a> {
-        return Builder::new(model);
+    pub fn builder<'a>(model: impl Into<Str<'a>>) -> CompletionBuilder<'a> {
+        return CompletionBuilder::new(model);
     }
 }
 
@@ -123,7 +123,7 @@ impl Completion {
     }
 }
 
-impl<'a> Builder<'a> {
+impl<'a> CompletionBuilder<'a> {
     /// Creates a new completion builder
     pub fn new(model: impl Into<Cow<'a, str>>) -> Self {
         return Self {

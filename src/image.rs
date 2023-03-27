@@ -36,22 +36,29 @@ pub struct Images {
     pub data: Vec<Data>,
 }
 
+/// The size of the generated images.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub enum Size {
+    /// 256-by-256 pixels
     #[serde(rename = "256x256")]
     P256,
+    /// 512-by-512 pixels
     #[serde(rename = "512x512")]
     P512,
+    /// 1024-by-1024 pixels
     #[serde(rename = "1024x1024")]
     #[default]
     P1024,
 }
 
+/// The format in which the generated images are returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponseFormat {
+    /// URL that points to an image hosted by OpenAI
     #[default]
     Url,
+    /// Base64-encoded image data
     #[serde(rename = "b64_json")]
     B64Json,
 }
@@ -60,9 +67,9 @@ pub enum ResponseFormat {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Data {
-    /// URL of the image hosted on the OpenAI servers
+    /// URL that points to an image hosted by OpenAI
     Url(String),
-    /// Base64 encoded image data
+    /// Base64-encoded image data
     #[serde(rename = "b64_json")]
     B64Json(Arc<String>),
 }

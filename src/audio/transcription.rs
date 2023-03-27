@@ -1,5 +1,3 @@
-use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
-
 use super::ResponseFormat;
 use crate::{
     error::{BuilderError, Error, OpenAiError, Result},
@@ -13,17 +11,19 @@ use reqwest::{
     Body,
 };
 use serde::Deserialize;
+use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 use tokio_util::io::ReaderStream;
 
+/// Transcribes audio into the input language.
 #[derive(Debug, Clone)]
-pub struct Transcription {
+pub struct TranscriptionBuilder {
     prompt: Option<String>,
     response_format: Option<ResponseFormat>,
     temperature: Option<f64>,
     language: Option<String>,
 }
 
-impl Transcription {
+impl TranscriptionBuilder {
     #[inline]
     pub fn new() -> Self {
         return Self {
@@ -34,16 +34,19 @@ impl Transcription {
         };
     }
 
+    /// An optional text to guide the model's style or continue a previous audio segment. The prompt should match the audio language.
     pub fn prompt(mut self, prompt: impl Into<String>) -> Self {
         self.prompt = Some(prompt.into());
         self
     }
 
+    /// The format of the transcript output
     pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
         self.response_format = Some(response_format);
         self
     }
 
+    /// The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, the model will use log probability to automatically increase the temperature until certain thresholds are hit.
     pub fn temperature(mut self, temperature: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = 0f64..=1f64;
         match RANGE.contains(&temperature) {
@@ -58,11 +61,13 @@ impl Transcription {
         }
     }
 
+    /// The language of the input audio. Supplying the input language in ISO-639-1 format will improve accuracy and latency.
     pub fn language(mut self, language: impl Into<String>) -> Self {
         self.language = Some(language.into());
         self
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_file(
         self,
         image: impl AsRef<Path>,
@@ -81,6 +86,7 @@ impl Transcription {
         return self.with_part(image, client).await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_tokio_reader<I>(
         self,
         image: I,
@@ -95,6 +101,7 @@ impl Transcription {
             .await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_stream<I>(
         self,
         image: I,
@@ -111,6 +118,7 @@ impl Transcription {
             .await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_body(
         self,
         file: impl Into<Body>,
@@ -125,6 +133,7 @@ impl Transcription {
             .await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_part(self, file: Part, client: impl AsRef<Client>) -> Result<String> {
         let mut body = Form::new().text("model", "whisper-1").part("file", file);
 

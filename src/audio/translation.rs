@@ -14,14 +14,15 @@ use serde::Deserialize;
 use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 use tokio_util::io::ReaderStream;
 
+/// Translates audio into into English.
 #[derive(Debug, Clone)]
-pub struct Translation {
+pub struct TranslationBuilder {
     prompt: Option<String>,
     response_format: Option<ResponseFormat>,
     temperature: Option<f64>,
 }
 
-impl Translation {
+impl TranslationBuilder {
     #[inline]
     pub fn new() -> Self {
         return Self {
@@ -31,16 +32,19 @@ impl Translation {
         };
     }
 
+    /// An optional text to guide the model's style or continue a previous audio segment. The prompt should be in English.
     pub fn prompt(mut self, prompt: impl Into<String>) -> Self {
         self.prompt = Some(prompt.into());
         self
     }
 
+    /// The format of the transcript output.
     pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
         self.response_format = Some(response_format);
         self
     }
 
+    /// The sampling temperature, between 0 and 1. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic. If set to 0, the model will use log probability to automatically increase the temperature until certain thresholds are hit.
     pub fn temperature(mut self, temperature: f64) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<f64> = 0f64..=1f64;
         match RANGE.contains(&temperature) {
@@ -55,6 +59,7 @@ impl Translation {
         }
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_file(
         self,
         image: impl AsRef<Path>,
@@ -73,6 +78,7 @@ impl Translation {
         return self.with_part(image, client).await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_tokio_reader<I>(
         self,
         image: I,
@@ -87,6 +93,7 @@ impl Translation {
             .await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_stream<I>(
         self,
         image: I,
@@ -103,6 +110,7 @@ impl Translation {
             .await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_body(
         self,
         file: impl Into<Body>,
@@ -117,6 +125,7 @@ impl Translation {
             .await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_part(self, file: Part, client: impl AsRef<Client>) -> Result<String> {
         let mut body = Form::new().text("model", "whisper-1").part("file", file);
 

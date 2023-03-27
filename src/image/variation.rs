@@ -16,7 +16,7 @@ use tokio::task::spawn_blocking;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
-pub struct Builder {
+pub struct VariationBuilder {
     n: Option<u32>,
     size: Option<Size>,
     response_format: Option<ResponseFormat>,
@@ -26,12 +26,12 @@ pub struct Builder {
 impl Images {
     /// Creates a variation of a given image.
     #[inline]
-    pub fn variation() -> Builder {
-        return Builder::new();
+    pub fn variation() -> VariationBuilder {
+        return VariationBuilder::new();
     }
 }
 
-impl Builder {
+impl VariationBuilder {
     #[inline]
     pub fn new() -> Self {
         return Self {
