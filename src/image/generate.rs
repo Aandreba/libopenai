@@ -20,11 +20,13 @@ pub struct Builder<'a> {
 }
 
 impl Images {
+    /// Creates an image given a prompt.
     #[inline]
     pub async fn new(prompt: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
         return Self::generate(prompt.as_ref())?.build(client).await;
     }
 
+    /// Creates an image given a prompt.
     #[inline]
     pub fn generate<'a>(prompt: impl Into<Str<'a>>) -> Result<Builder<'a>> {
         return Builder::new(prompt);
@@ -48,6 +50,7 @@ impl<'a> Builder<'a> {
         });
     }
 
+    /// The number of images to generate. Must be between 1 and 10.
     #[inline]
     pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<u32> = 1..=10;
@@ -63,24 +66,28 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// The size of the generated images.
     #[inline]
     pub fn size(mut self, size: Size) -> Self {
         self.size = Some(size);
         self
     }
 
+    /// The format in which the generated images are returned.
     #[inline]
     pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
         self.response_format = Some(response_format);
         self
     }
 
+    /// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
     #[inline]
     pub fn user(mut self, user: impl Into<Str<'a>>) -> Self {
         self.user = Some(user.into());
         self
     }
 
+    /// Sends the request
     pub async fn build(self, client: impl AsRef<Client>) -> Result<Images> {
         let resp = client
             .as_ref()

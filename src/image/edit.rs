@@ -1,11 +1,14 @@
 use super::{load_image, Images, ResponseFormat, Size};
-use crate::error::{BuilderError, Error, FallibleResponse, Result};
+use crate::{
+    error::{BuilderError, Error, FallibleResponse, Result},
+    Client,
+};
 use bytes::Bytes;
 use futures::{future::try_join, FutureExt, TryStream};
-use rand::{distributions::Standard, thread_rng, Rng};
+use rand::{distributions::Standard, random, thread_rng, Rng};
 use reqwest::{
     multipart::{Form, Part},
-    Body, Client,
+    Body,
 };
 use std::{ffi::OsStr, ops::RangeInclusive, path::PathBuf};
 use tokio::task::spawn_blocking;
@@ -21,6 +24,7 @@ pub struct Builder {
 }
 
 impl Images {
+    /// Creates an edited or extended image given an original image and a prompt.
     #[inline]
     pub fn edit(prompt: impl Into<String>) -> Result<Builder> {
         return Builder::new(prompt);
@@ -44,6 +48,7 @@ impl Builder {
         });
     }
 
+    /// The number of images to generate. Must be between 1 and 10.
     #[inline]
     pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<u32> = 1..=10;
@@ -59,18 +64,21 @@ impl Builder {
         };
     }
 
+    /// The size of the generated images.
     #[inline]
     pub fn size(mut self, size: Size) -> Self {
         self.size = Some(size);
         self
     }
 
+    /// The format in which the generated images are returned.
     #[inline]
     pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
         self.response_format = Some(response_format);
         self
     }
 
+    /// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
     #[inline]
     pub fn user(mut self, user: impl Into<String>) -> Self {
         self.user = Some(user.into());
@@ -78,17 +86,19 @@ impl Builder {
     }
 
     /// Sends the request with the specified files.
-    /// If the images do not conform to OpenAI's requirements (square PNG), they will be adapted before they are sent
+    ///
+    /// If the images do not conform to OpenAI's requirements, they will be adapted before they are sent
     pub async fn with_file(
         self,
         image: impl Into<PathBuf>,
         mask: Option<PathBuf>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Images> {
-        let mut rng = thread_rng();
         let (image, mask) = match mask {
             Some(mask) => {
+                let mut rng = thread_rng();
                 let image: PathBuf = image.into();
+
                 let image_name = match image.file_name().map(OsStr::to_string_lossy) {
                     Some(x) => x.into_owned(),
                     None => format!("{}.png", rng.sample::<u64, _>(Standard)),
@@ -112,7 +122,7 @@ impl Builder {
                 let image: PathBuf = image.into();
                 let name = match image.file_name().map(OsStr::to_string_lossy) {
                     Some(x) => x.into_owned(),
-                    None => format!("{}.png", rng.sample::<u64, _>(Standard)),
+                    None => format!("{}.png", random::<u64>()),
                 };
 
                 let image = spawn_blocking(move || load_image(image)).await.unwrap()?;
@@ -120,32 +130,33 @@ impl Builder {
             }
         };
 
-        return self.with_part(image, mask, api_key).await;
+        return self.with_part(image, mask, client).await;
     }
 
-    pub async fn with_tokio_reader<I>(self, image: I, api_key: impl AsRef<str>) -> Result<Images>
+    /// Sends the request with the specified file.
+    pub async fn with_tokio_reader<I>(self, image: I, client: impl AsRef<Client>) -> Result<Images>
     where
         I: 'static + Send + Sync + tokio::io::AsyncRead,
     {
-        return self.with_stream(ReaderStream::new(image), api_key).await;
+        return self.with_stream(ReaderStream::new(image), client).await;
     }
 
-    pub async fn with_stream<I>(self, image: I, api_key: impl AsRef<str>) -> Result<Images>
+    /// Sends the request with the specified file.
+    pub async fn with_stream<I>(self, image: I, client: impl AsRef<Client>) -> Result<Images>
     where
         I: TryStream + Send + Sync + 'static,
         I::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
         Bytes: From<I::Ok>,
     {
-        return self
-            .with_body(Body::wrap_stream(image), None, api_key)
-            .await;
+        return self.with_body(Body::wrap_stream(image), None, client).await;
     }
 
+    /// Sends the request with the specified files.
     pub async fn with_body(
         self,
         image: impl Into<Body>,
         mask: Option<Body>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Images> {
         let mut rng = thread_rng();
 
@@ -155,19 +166,18 @@ impl Builder {
                 mask.map(|mask| {
                     Part::stream(mask).file_name(format!("{}.png", rng.sample::<u64, _>(Standard)))
                 }),
-                api_key,
+                client,
             )
             .await;
     }
 
+    /// Sends the request with the specified files.
     pub async fn with_part(
         self,
         image: Part,
         mask: Option<Part>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Images> {
-        let client = Client::new();
-
         let mut body = Form::new().text("prompt", self.prompt).part("image", image);
 
         if let Some(mask) = mask {
@@ -199,8 +209,8 @@ impl Builder {
         }
 
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/images/edits")
-            .bearer_auth(api_key.as_ref())
             .multipart(body)
             .send()
             .await?

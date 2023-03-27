@@ -60,6 +60,7 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
     #[inline]
     pub fn user(mut self, user: impl Into<Str<'a>>) -> Self {
         self.user = Some(user.into());

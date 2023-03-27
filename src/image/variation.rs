@@ -21,6 +21,7 @@ pub struct Builder {
 }
 
 impl Images {
+    /// Creates a variation of a given image.
     #[inline]
     pub fn variation() -> Builder {
         return Builder::new();
@@ -38,6 +39,7 @@ impl Builder {
         };
     }
 
+    /// The number of images to generate. Must be between 1 and 10.
     #[inline]
     pub fn n(mut self, n: u32) -> Result<Self, BuilderError<Self>> {
         const RANGE: RangeInclusive<u32> = 1..=10;
@@ -53,28 +55,32 @@ impl Builder {
         };
     }
 
+    /// The size of the generated images.
     #[inline]
     pub fn size(mut self, size: Size) -> Self {
         self.size = Some(size);
         self
     }
 
+    /// The format in which the generated images are returned.
     #[inline]
     pub fn response_format(mut self, response_format: ResponseFormat) -> Self {
         self.response_format = Some(response_format);
         self
     }
 
+    /// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
     #[inline]
     pub fn user(mut self, user: impl Into<String>) -> Self {
         self.user = Some(user.into());
         self
     }
 
+    /// Sends the request with the specified file
     pub async fn with_file(
         self,
         image: impl Into<PathBuf>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Images> {
         let image_path: PathBuf = image.into();
         let my_image_path = image_path.clone();
@@ -92,14 +98,18 @@ impl Builder {
         return self.with_part(image, api_key).await;
     }
 
-    pub async fn with_tokio_reader<I>(self, image: I, api_key: impl AsRef<str>) -> Result<Images>
+    /// Sends the request with the specified file.
+    ///
+    /// If the images do not conform to OpenAI's requirements, they will be adapted before they are sent
+    pub async fn with_tokio_reader<I>(self, image: I, client: impl AsRef<Client>) -> Result<Images>
     where
         I: 'static + Send + Sync + tokio::io::AsyncRead,
     {
         return self.with_stream(ReaderStream::new(image), api_key).await;
     }
 
-    pub async fn with_stream<I>(self, image: I, api_key: impl AsRef<str>) -> Result<Images>
+    /// Sends the request with the specified file.
+    pub async fn with_stream<I>(self, image: I, client: impl AsRef<Client>) -> Result<Images>
     where
         I: TryStream + Send + Sync + 'static,
         I::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
@@ -108,10 +118,11 @@ impl Builder {
         return self.with_body(Body::wrap_stream(image), api_key).await;
     }
 
+    /// Sends the request with the specified file.
     pub async fn with_body(
         self,
         image: impl Into<Body>,
-        api_key: impl AsRef<str>,
+        client: impl AsRef<Client>,
     ) -> Result<Images> {
         return self
             .with_part(
@@ -121,7 +132,8 @@ impl Builder {
             .await;
     }
 
-    pub async fn with_part(self, image: Part, api_key: impl AsRef<str>) -> Result<Images> {
+    /// Sends the request with the specified file.
+    pub async fn with_part(self, image: Part, client: impl AsRef<Client>) -> Result<Images> {
         let client = Client::new();
 
         let mut body = Form::new().part("image", image);

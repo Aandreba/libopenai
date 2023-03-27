@@ -1,7 +1,4 @@
-use super::{
-    common::StreamTokioAsyncRead,
-    error::{Error, Result},
-};
+use super::error::{Error, Result};
 use crate::error_to_io_error;
 use base64::Engine;
 use bytes::Bytes;
@@ -25,11 +22,13 @@ use std::{
     sync::Arc,
 };
 use tokio::task::spawn_blocking;
+use tokio_util::io::StreamReader;
 
 pub mod edit;
 pub mod generate;
 pub mod variation;
 
+/// Result from an images request
 #[derive(Debug, Clone, Deserialize)]
 pub struct Images {
     #[serde(with = "chrono::serde::ts_seconds")]
@@ -57,15 +56,19 @@ pub enum ResponseFormat {
     B64Json,
 }
 
+/// Image data
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Data {
+    /// URL of the image hosted on the OpenAI servers
     Url(String),
+    /// Base64 encoded image data
     #[serde(rename = "b64_json")]
     B64Json(Arc<String>),
 }
 
 impl Images {
+    /// Saves all the images in the response into the specified directory
     pub async fn save_at(self, path: impl AsRef<Path>) -> Result<()> {
         let mut rng = thread_rng();
         let path: &Path = path.as_ref();
@@ -78,13 +81,14 @@ impl Images {
         return fut.await;
     }
 
+    /// Saves all the images in the response into the path provided for each one by `f`
     pub async fn save<F: FnMut(&Data) -> PathBuf>(self, mut f: F) -> Result<()> {
         let fut = futures::stream::iter(self.data.into_iter())
             .map(|data| {
                 let path = f(&data);
                 tokio::spawn(async move {
                     let mut w = tokio::fs::File::create(path).await?;
-                    data.save_into_tokio(&mut w).await?;
+                    data.write_into_tokio(&mut w).await?;
                     return Result::<()>::Ok(());
                 })
             })
@@ -103,6 +107,7 @@ impl Images {
 }
 
 impl Data {
+    /// Returns the response's value as a [`str`] slice
     #[inline]
     pub fn as_str(&self) -> &str {
         match self {
@@ -111,6 +116,7 @@ impl Data {
         }
     }
 
+    /// Returns a bytes [`Stream`](futures::Stream) with the contents of the image
     pub async fn into_stream(self) -> Result<impl TryStream<Ok = Bytes, Error = Error>> {
         let v = match self {
             Data::Url(url) => Either::Left(
@@ -138,17 +144,20 @@ impl Data {
         return Ok(futures::stream::StreamExt::map(v, LeftRight::into_inner));
     }
 
+    /// Returns an [`futures::io::AsyncBufRead`] with the contents of the image
     pub async fn into_futures_reader(self) -> Result<impl futures::io::AsyncBufRead> {
         let stream = self.into_stream().await?.map_err(error_to_io_error);
         return Ok(stream.into_async_read());
     }
 
+    /// Returns an [`tokio::io::AsyncBufRead`] with the contents of the image
     pub async fn into_tokio_reader(self) -> Result<impl tokio::io::AsyncBufRead> {
         let stream = self.into_stream().await?.map_err(error_to_io_error);
-        return Ok(StreamTokioAsyncRead::new(stream));
+        return Ok(StreamReader::new(stream));
     }
 
-    pub async fn save_into_tokio<W: ?Sized + Unpin + tokio::io::AsyncWrite>(
+    /// Writes the image's content into the specified [`tokio::io::AsyncWrite`] writer
+    pub async fn write_into_tokio<W: ?Sized + Unpin + tokio::io::AsyncWrite>(
         self,
         w: &mut W,
     ) -> Result<()> {
@@ -158,7 +167,8 @@ impl Data {
         return Ok(());
     }
 
-    pub async fn save_into_futures<W: ?Sized + Unpin + futures::io::AsyncWrite>(
+    /// Writes the image's content into the specified [`futures::io::AsyncWrite`] writer
+    pub async fn write_into_futures<W: ?Sized + Unpin + futures::io::AsyncWrite>(
         self,
         w: &mut W,
     ) -> Result<()> {
@@ -169,7 +179,11 @@ impl Data {
     }
 }
 
-/// Note that this is a **blocking** method, and should not be used in async contexts
+/// Loads the image from `path` and transforms it into a format valid to be sent to an OpenAI endpoint.
+///
+/// If the image is already in a valid format, no conversion will be done and it's byte stream will be directly returned.
+///
+/// > **Note**: This is a **blocking** method and should not be used in async contexts
 pub fn load_image(path: impl AsRef<Path>) -> Result<Body> {
     let mut image = std::fs::File::open(path)?;
 
