@@ -4,25 +4,25 @@ use super::{
     error::{BuilderError, Result},
     Str,
 };
-use crate::error::FallibleResponse;
+use crate::{error::FallibleResponse, Client};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ops::RangeInclusive};
 
+/// Given a prompt and an instruction, the model will return an edited version of the prompt.
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Edit {
-    pub object: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created: DateTime<Utc>,
     pub model: String,
     pub choices: Vec<Choice>,
-    #[serde(default)]
-    pub usage: Option<Usage>,
+    pub usage: Usage,
 }
 
+/// Builder for [`Edit`]
 #[derive(Debug, Clone, Serialize)]
-pub struct Builder<'a> {
+pub struct EditBuilder<'a> {
     model: Str<'a>,
     instruction: Str<'a>,
     input: Option<Str<'a>>,
@@ -32,6 +32,7 @@ pub struct Builder<'a> {
 }
 
 impl Edit {
+    /// Creates a new edit for the provided input, instruction, and parameters.
     #[inline]
     pub async fn new(
         model: impl AsRef<str>,
@@ -41,17 +42,20 @@ impl Edit {
     ) -> Result<Self> {
         return Self::builder(model.as_ref(), instruction.as_ref())
             .input(input.as_ref())
-            .build(api_key.as_ref())
+            .build(client)
             .await;
     }
 
     #[inline]
-    pub fn builder<'a>(model: impl Into<Str<'a>>, instruction: impl Into<Str<'a>>) -> Builder<'a> {
-        return Builder::new(model, instruction);
+    pub fn builder<'a>(
+        model: impl Into<Str<'a>>,
+        instruction: impl Into<Str<'a>>,
+    ) -> EditBuilder<'a> {
+        return EditBuilder::new(model, instruction);
     }
 }
 
-impl<'a> Builder<'a> {
+impl<'a> EditBuilder<'a> {
     pub fn new(model: impl Into<Cow<'a, str>>, instruction: impl Into<Cow<'a, str>>) -> Self {
         return Self {
             model: model.into(),
@@ -63,11 +67,13 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// The input text to use as a starting point for the edit.
     pub fn input(mut self, input: impl Into<Str<'a>>) -> Self {
         self.input = Some(input.into());
         self
     }
 
+    /// How many edits to generate for the input and instruction.
     pub fn n(mut self, n: u64) -> Self {
         self.n = Some(n);
         self
@@ -90,16 +96,19 @@ impl<'a> Builder<'a> {
         };
     }
 
+    /// An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.
+    ///
+    /// We generally recommend altering this or `temperature` but not both.
     pub fn top_p(mut self, top_p: f64) -> Self {
         self.top_p = Some(top_p);
         self
     }
 
-    pub async fn build(self, api_key: &str) -> Result<Edit> {
-        let client = Client::new();
+    /// Sends the request.
+    pub async fn build(self, client: impl AsRef<Client>) -> Result<Edit> {
         let resp = client
+            .as_ref()
             .post("https://api.openai.com/v1/edits")
-            .bearer_auth(api_key)
             .json(&self)
             .send()
             .await?

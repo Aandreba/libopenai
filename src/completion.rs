@@ -38,7 +38,6 @@ pub struct Logprobs {
 #[non_exhaustive]
 pub struct Completion {
     pub id: String,
-    pub object: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created: DateTime<Utc>,
     pub model: String,

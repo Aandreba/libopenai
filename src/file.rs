@@ -22,7 +22,6 @@ use tokio_util::io::ReaderStream;
 #[non_exhaustive]
 pub struct File {
     pub id: String,
-    pub object: String,
     pub bytes: u64,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
@@ -35,7 +34,6 @@ pub struct File {
 #[non_exhaustive]
 pub struct Delete {
     pub id: String,
-    pub object: String,
     pub deleted: bool,
 }
 

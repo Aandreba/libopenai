@@ -12,7 +12,6 @@ pub mod data;
 #[non_exhaustive]
 pub struct FineTune {
     pub id: String,
-    pub object: String,
     pub model: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
@@ -41,7 +40,6 @@ pub struct Hyperparams {
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Event {
-    pub object: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
     pub level: String,

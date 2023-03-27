@@ -17,6 +17,8 @@ pub mod chat;
 pub mod common;
 /// Given a prompt, the model will return one or more predicted completions, and can also return the probabilities of alternative tokens at each position.
 pub mod completion;
+/// Given a prompt and an instruction, the model will return an edited version of the prompt.
+pub mod edit;
 /// Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.
 pub mod embeddings;
 /// Library's error types
@@ -29,7 +31,6 @@ pub mod image;
 pub mod model;
 /// Given a input text, outputs if the model classifies it as violating OpenAI's content policy.
 pub mod moderations;
-// pub mod edit;
 //pub mod finetune;
 
 pub mod prelude {

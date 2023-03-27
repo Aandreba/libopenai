@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Embedding {
-    pub object: String,
     pub embedding: Vec<f64>,
     pub index: u64,
 }
@@ -18,7 +17,6 @@ pub struct Embedding {
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct EmbeddingResult {
-    pub object: String,
     pub data: Vec<Embedding>,
     pub model: String,
     pub usage: Usage,

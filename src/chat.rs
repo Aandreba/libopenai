@@ -44,7 +44,6 @@ pub struct ChatChoice {
 #[non_exhaustive]
 pub struct ChatCompletion {
     pub id: String,
-    pub object: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created: DateTime<Utc>,
     pub model: String,
