@@ -1,4 +1,4 @@
-use futures::{StreamExt, TryStreamExt};
+use futures::TryStreamExt;
 use libopenai::{
     error::Result,
     file::TemporaryFile,
@@ -34,18 +34,15 @@ async fn stream() -> Result<()> {
         "text-davinci-003",
         "Whats' the best way to calculate a factorial?",
     )
-    .n(2)
     .max_tokens(256)
     .build_stream(&client)
     .await?
-    .completions()
-    .try_for_each(|mut entry| async move {
-        while let Some(entry) = entry.next().await {
-            println!("{:?}", entry.text);
-        }
-        return Ok(());
-    })
-    .await?;
+    .into_text_stream();
+
+    while let Some(token) = stream.try_next().await? {
+        print!("{token} ");
+    }
+    println!();
 
     return Ok(());
 }
@@ -106,8 +103,6 @@ async fn ft() -> Result<()> {
     let ft = match FineTune::retreive("ft-8KUqxC0IcvgVe707j93Xoa6D", &client).await {
         Ok(x) => x,
         Err(_) => {
-            tracing::info!("Fine-Tune not found. Generating new one");
-
             let questions = Completion::builder(MODEL, "Give me a math question")
                 .n(10)
                 .max_tokens(100)

@@ -35,6 +35,7 @@ pub mod embeddings;
 pub mod error;
 /// Files are used to upload documents that can be used with features like fine-tuning.
 pub mod file;
+/// Manage fine-tuning jobs to tailor a model to your specific training data.
 pub mod finetune;
 /// Given a prompt and/or an input image, the model will generate a new image.
 pub mod image;
@@ -62,6 +63,8 @@ pub mod prelude {
     pub use error::Error;
 
     pub use file::File;
+
+    pub use finetune::{FineTune, FineTuneEvent};
 
     pub use super::image::ImageData;
     pub use super::image::Images;
@@ -144,13 +147,18 @@ impl DerefMut for Client {
 }
 
 pin_project_lite::pin_project! {
+    /// A [`Stream`] of [server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events), sent by OpenAI
     pub struct OpenAiStream<T> {
         #[pin]
         inner: Pin<Box<dyn 'static + Stream<Item = reqwest::Result<Bytes>> + Send + Sync>>,
-        current_line: Option<Bytes>,
+        current_chunk: Option<Bytes>,
         _phtm: PhantomData<T>,
     }
 }
+
+// Stream doesn't actually hold any value of type `T`
+unsafe impl<T> Send for OpenAiStream<T> {}
+unsafe impl<T> Sync for OpenAiStream<T> {}
 
 impl<T: DeserializeOwned> Stream for OpenAiStream<T> {
     type Item = Result<T>;
@@ -183,18 +191,18 @@ impl<T: DeserializeOwned> Stream for OpenAiStream<T> {
         }
 
         loop {
-            let line = match self.current_line {
+            let line = match self.current_chunk {
                 Some(ref mut current) => {
                     let next = process_line(current);
                     if current.is_empty() {
-                        self.current_line = None
+                        self.current_chunk = None
                     }
                     next
                 }
                 None => match ready!(self.inner.as_mut().poll_next(cx)) {
                     Some(Ok(mut x)) => {
                         let next = process_line(&mut x);
-                        self.current_line = match x.is_empty() {
+                        self.current_chunk = match x.is_empty() {
                             true => None,
                             false => Some(x),
                         };

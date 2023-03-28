@@ -1,7 +1,20 @@
 [package]
 name = "libopenai"
+description = "A Rust client for OpenAI's API"
 version = "0.1.0"
 edition = "2021"
+authors = ["Alex Andreba <aandrebafreelancer@gmail.com>"]
+keywords = ["chatgpt", "openai", "ai"]
+categories = [
+    "api-bindings",
+    "asynchronous",
+    "multimedia::images",
+    "multimedia::audio",
+    "text-processing",
+]
+repository = "https://github.com/Aandreba/libopenai"
+license-file = "LICENSE.md"
+exclude = [".github", "media", "Makefile"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

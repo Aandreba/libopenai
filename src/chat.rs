@@ -337,7 +337,7 @@ impl ChatCompletionStream {
     fn create(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
-            current_line: None,
+            current_chunk: None,
             _phtm: PhantomData,
         };
     }

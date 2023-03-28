@@ -11,6 +11,7 @@ use std::marker::PhantomData;
 
 pub mod data;
 
+/// Manage fine-tuning jobs to tailor a model to your specific training data.
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct FineTune {
@@ -81,11 +82,13 @@ pub struct Builder<'a> {
 }
 
 impl FineTune {
+    /// Creates a job that fine-tunes a specified model from a given dataset.
     #[inline]
     pub async fn new(training_file: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
         return Self::builder(training_file.as_ref()).build(client).await;
     }
 
+    /// Gets info about the fine-tune job.
     pub async fn retreive(id: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
         let ft = client
             .as_ref()
@@ -117,25 +120,29 @@ impl FineTune {
             .ok_or_else(|| Error::msg("Fine tuned model not found"));
     }
 
+    /// Immediately cancel a fine-tune job.
     #[inline]
     pub async fn cancel(self, client: impl AsRef<Client>) -> Result<Self> {
         return cancel_fine_tune(self.id, client).await;
     }
 
+    /// Get fine-grained status updates for a fine-tune job.
     #[inline]
     pub async fn events(&self, client: impl AsRef<Client>) -> Result<Vec<FineTuneEvent>> {
         return fine_tune_events(&self.id, client).await;
     }
 
+    /// Get fine-grained status updates for a fine-tune job.
     #[inline]
     pub async fn event_stream(&self, client: impl AsRef<Client>) -> Result<FineTuneEventStream> {
         return fine_tune_event_stream(&self.id, client).await;
     }
 
+    /// Delete a fine-tuned model. You must have the Owner role in your organization.
     #[inline]
     pub async fn delete_model(self, client: impl AsRef<Client>) -> Option<Result<Delete>> {
         return match self.fine_tuned_model {
-            Some(ftm) => Some(delete_fine_tune(ftm, client).await),
+            Some(ftm) => Some(delete_fine_tune_model(ftm, client).await),
             None => None,
         };
     }
@@ -262,7 +269,9 @@ impl<'a> Builder<'a> {
         };
     }
 
-    /// Sends the request
+    /// Sends the request.
+    ///
+    /// Response includes details of the enqueued job including job status and the name of the fine-tuned models once complete.
     pub async fn build(self, client: impl AsRef<Client>) -> Result<FineTune> {
         let finetune = client
             .as_ref()
@@ -295,6 +304,7 @@ async fn fine_tune_events_inner(
     return Ok(resp);
 }
 
+/// Get fine-grained status updates for a fine-tune job.
 pub async fn fine_tune_events(
     id: impl AsRef<str>,
     client: impl AsRef<Client>,
@@ -314,6 +324,7 @@ pub async fn fine_tune_events(
     return Ok(resp);
 }
 
+/// Get fine-grained status updates for a fine-tune job.
 pub async fn fine_tune_event_stream(
     id: impl AsRef<str>,
     client: impl AsRef<Client>,
@@ -324,11 +335,12 @@ pub async fn fine_tune_event_stream(
 
     return Ok(FineTuneEventStream {
         inner: Box::pin(stream),
-        current_line: None,
+        current_chunk: None,
         _phtm: PhantomData,
     });
 }
 
+/// Immediately cancel a fine-tune job.
 pub async fn cancel_fine_tune(id: impl AsRef<str>, client: impl AsRef<Client>) -> Result<FineTune> {
     let ft = client
         .as_ref()
@@ -345,7 +357,8 @@ pub async fn cancel_fine_tune(id: impl AsRef<str>, client: impl AsRef<Client>) -
     return Ok(ft);
 }
 
-pub async fn delete_fine_tune(
+/// Delete a fine-tuned model. You must have the Owner role in your organization.
+pub async fn delete_fine_tune_model(
     model_id: impl AsRef<str>,
     client: impl AsRef<Client>,
 ) -> Result<Delete> {
@@ -364,6 +377,7 @@ pub async fn delete_fine_tune(
     return Ok(del);
 }
 
+/// List your organization's fine-tuning jobs
 pub async fn fine_tunes(client: impl AsRef<Client>) -> Result<Vec<FineTune>> {
     #[derive(Debug, Deserialize)]
     struct Response {
