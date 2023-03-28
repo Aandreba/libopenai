@@ -26,6 +26,6 @@ jobs:
             - user: actions/checkout@v3
             - name: Check
             - run: cargo check --verbose
-	        - run: cargo check --verbose --all-features
-	        - run: cargo check --verbose --tests
-	        - run: cargo check --verbose --tests --all-features
+            - run: cargo check --verbose --all-features
+            - run: cargo check --verbose --tests
+            - run: cargo check --verbose --tests --all-features
