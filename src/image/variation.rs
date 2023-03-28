@@ -80,6 +80,8 @@ impl VariationBuilder {
     }
 
     /// Sends the request with the specified file
+    ///
+    /// If the images do not conform to OpenAI's requirements, they will be adapted before they are sent
     pub async fn with_file(
         self,
         image: impl Into<PathBuf>,
@@ -102,8 +104,6 @@ impl VariationBuilder {
     }
 
     /// Sends the request with the specified file.
-    ///
-    /// If the images do not conform to OpenAI's requirements, they will be adapted before they are sent
     pub async fn with_tokio_reader<I>(self, image: I, client: impl AsRef<Client>) -> Result<Images>
     where
         I: 'static + Send + Sync + tokio::io::AsyncRead,

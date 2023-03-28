@@ -3,6 +3,7 @@ use libopenai::prelude::*;
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().unwrap();
+    tracing_subscriber::fmt::init();
 
     let client = Client::new(
         None, // Gets api key from `OPENAI_API_KEY` enviroment variable

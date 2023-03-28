@@ -67,6 +67,7 @@ pub mod prelude {
 
     pub use file::File;
 
+    pub use finetune::data::TrainingData;
     pub use finetune::{FineTune, FineTuneEvent};
 
     pub use super::image::ImageData;

@@ -25,6 +25,7 @@ use std::{
 };
 use tokio_util::io::ReaderStream;
 
+// File that is deleted when dropped
 #[derive(Debug)]
 pub struct TemporaryFile {
     inner: File,
@@ -234,8 +235,9 @@ impl<S: Stream<Item = reqwest::Result<Bytes>>, T: DeserializeOwned> Stream for C
 }
 
 impl TemporaryFile {
+    /// Creates a new [`TemporaryFile`] from an existing [`File`] instance.
     #[inline]
-    pub fn new(inner: File, client: Client) -> Self {
+    pub fn from_file(inner: File, client: Client) -> Self {
         return Self {
             inner,
             client,
@@ -243,6 +245,9 @@ impl TemporaryFile {
         };
     }
 
+    /// Returns the inner [`File`]
+    ///
+    /// Note that after this function is invoked, the file will no longer be automatically deleted when dropped.
     #[inline]
     pub fn into_inner(self) -> File {
         let mut this = ManuallyDrop::new(self);

@@ -14,7 +14,7 @@ categories = [
 ]
 repository = "https://github.com/Aandreba/libopenai"
 license-file = "LICENSE.md"
-exclude = [".github", "media", "Makefile"]
+exclude = [".github", "examples", "media", "Makefile"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

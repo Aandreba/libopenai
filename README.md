@@ -22,7 +22,8 @@ use libopenai::prelude::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    # dotenv::dotenv().unwrap();
+    // OPTIONAL: Load variables in a `.env` file into the enviroment
+    dotenv::dotenv().unwrap();
 
     let client = Client::new(
         None, // Gets api key from `OPENAI_API_KEY` enviroment variable
@@ -41,9 +42,15 @@ async fn main() -> Result<()> {
     println!("{:#?}", basic);
     return Ok(());
 }
-
 ```
 
 ## Features
+
+-   Support for completions (regular & chat)
+-   [Image generation](https://docs.rs/libopenai/latest/libopenai/image) with automatic conversion to desired formats
+-   [Audio-to-text](https://docs.rs/libopenai/latest/libopenai/audio) conversions
+-   Support for streaming
+
+## Cargo features
 
 Currently, the only feature available is **tracing**, which enables some minor logging
