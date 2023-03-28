@@ -3,15 +3,15 @@ use super::{
     error::{BuilderError, Result},
     Str,
 };
-use crate::{
-    error::{Error, FallibleResponse, OpenAiError},
-    trim_ascii_start, Client,
-};
+use crate::{error::FallibleResponse, Client, OpenAiStream};
 use chrono::{DateTime, Utc};
-use futures::{ready, Stream, TryStreamExt};
+
+use futures::{Stream, TryStreamExt};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, future::ready, ops::RangeInclusive, pin::Pin};
+use std::{
+    borrow::Cow, collections::HashMap, future::ready, marker::PhantomData, ops::RangeInclusive,
+};
 
 /// Message role
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -53,9 +53,7 @@ pub struct ChatCompletion {
 }
 
 /// Given a chat conversation, the model will return a chat completion response.
-pub struct ChatCompletionStream {
-    inner: Pin<Box<dyn Stream<Item = reqwest::Result<bytes::Bytes>>>>,
-}
+pub type ChatCompletionStream = OpenAiStream<ChatCompletion>;
 
 /// [`ChatCompletion`]/[`ChatCompletionBuilder`] request builder
 #[derive(Debug, Clone, Serialize)]
@@ -339,6 +337,7 @@ impl ChatCompletionStream {
     fn create(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
+            _phtm: PhantomData,
         };
     }
 }
@@ -356,42 +355,5 @@ impl ChatCompletionStream {
         return self
             .try_filter_map(|x| ready(Ok(x.choices.into_iter().next())))
             .map_ok(|x| x.message.content);
-    }
-}
-
-impl Stream for ChatCompletionStream {
-    type Item = Result<ChatCompletion>; // Result<Completion>
-
-    #[inline]
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        const DONE: &[u8] = b"[DONE]";
-
-        #[derive(Debug, Deserialize)]
-        struct ChunkError {
-            error: OpenAiError,
-        }
-
-        match ready!(self.inner.as_mut().poll_next(cx)) {
-            Some(Ok(x)) => {
-                // Check if chunk is error
-                if let Ok(ChunkError { error }) = serde_json::from_slice::<ChunkError>(&x) {
-                    return std::task::Poll::Ready(Some(Err(Error::from(error))));
-                }
-
-                // remove initial "data"
-                let x: &[u8] = trim_ascii_start(&x[5..]);
-                if x.starts_with(DONE) {
-                    return std::task::Poll::Ready(None);
-                }
-
-                let json = serde_json::from_slice::<ChatCompletion>(x)?;
-                return std::task::Poll::Ready(Some(Ok(json)));
-            }
-            Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),
-            None => return std::task::Poll::Ready(None),
-        }
     }
 }

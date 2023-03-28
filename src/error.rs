@@ -99,7 +99,7 @@ impl<T> FallibleResponse<T> {
             FallibleResponse::Ok(x) => Ok(x),
             FallibleResponse::Err { error } => {
                 #[cfg(feature = "tracing")]
-                tracing::error!("OpenAPI error: {error}");
+                tracing::error!("OpenAI error: {error}");
                 Err(error)
             }
         }

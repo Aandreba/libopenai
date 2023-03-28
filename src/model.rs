@@ -8,6 +8,8 @@ use serde::Deserialize;
 #[non_exhaustive]
 pub struct Model {
     pub id: String,
+    #[serde(rename = "created", with = "chrono::serde::ts_seconds")]
+    pub created_at: DateTime<Utc>,
     pub owned_by: String,
     pub permission: Vec<Permission>,
     #[serde(default)]
@@ -20,12 +22,12 @@ pub struct Model {
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Permission {
-    #[serde(with = "chrono::serde::ts_seconds")]
+    #[serde(rename = "created", with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
     pub id: String,
     pub allow_create_engine: bool,
     pub allow_sampling: bool,
-    pub allow_lobprobs: bool,
+    pub allow_logprobs: bool,
     pub allow_search_indices: bool,
     pub allow_view: bool,
     pub allow_fine_tuning: bool,

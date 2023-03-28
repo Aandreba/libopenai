@@ -1,13 +1,22 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+use bytes::Bytes;
 use error::{Error, Result};
+use futures::{ready, Stream};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
-use serde::{de::Visitor, Deserializer};
+use serde::{
+    de::{DeserializeOwned, Visitor},
+    Deserialize, Deserializer,
+};
 use std::{
     borrow::Cow,
+    marker::PhantomData,
     ops::{Deref, DerefMut},
+    pin::Pin,
     time::Duration,
 };
+
+use crate::error::OpenAiError;
 
 pub(crate) type Str<'a> = Cow<'a, str>;
 
@@ -27,13 +36,13 @@ pub mod embeddings;
 pub mod error;
 /// Files are used to upload documents that can be used with features like fine-tuning.
 pub mod file;
+pub mod finetune;
 /// Given a prompt and/or an input image, the model will generate a new image.
 pub mod image;
 /// List and describe the various models available in the API.
 pub mod model;
 /// Given a input text, outputs if the model classifies it as violating OpenAI's content policy.
 pub mod moderations;
-//pub mod finetune;
 
 pub mod prelude {
     use super::*;
@@ -132,6 +141,53 @@ impl DerefMut for Client {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+pin_project_lite::pin_project! {
+    pub struct OpenAiStream<T> {
+        #[pin]
+        inner: Pin<Box<dyn 'static + Stream<Item = reqwest::Result<Bytes>> + Send + Sync>>,
+        _phtm: PhantomData<T>,
+    }
+}
+
+impl<T: DeserializeOwned> Stream for OpenAiStream<T> {
+    type Item = Result<T>;
+
+    #[inline]
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        const DONE: &[u8] = b"[DONE]";
+
+        #[derive(Debug, Deserialize)]
+        struct ChunkError {
+            error: OpenAiError,
+        }
+
+        match ready!(self.inner.as_mut().poll_next(cx)) {
+            Some(Ok(x)) => {
+                // Check if chunk is error
+                if let Ok(ChunkError { error }) = serde_json::from_slice::<ChunkError>(&x) {
+                    return std::task::Poll::Ready(Some(Err(Error::from(error))));
+                }
+
+                // remove initial "data"
+                let x: &[u8] = trim_ascii_start(&x[5..]);
+                if x.starts_with(DONE) {
+                    return std::task::Poll::Ready(None);
+                }
+
+                println!("{}", core::str::from_utf8(x).unwrap());
+
+                let json = serde_json::from_slice::<T>(x)?;
+                return std::task::Poll::Ready(Some(Ok(json)));
+            }
+            Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),
+            None => return std::task::Poll::Ready(None),
+        }
     }
 }
 

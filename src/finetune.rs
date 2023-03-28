@@ -1,10 +1,14 @@
 use crate::{
+    common::Delete,
     error::{BuilderError, FallibleResponse, Result},
     file::File,
-    Client, Str,
+    prelude::Error,
+    Client, OpenAiStream, Str,
 };
 use chrono::{DateTime, Utc};
+use futures::{ready, Stream, TryStreamExt};
 use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 
 pub mod data;
 
@@ -16,10 +20,10 @@ pub struct FineTune {
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
     #[serde(default)]
-    pub events: Option<Vec<Event>>,
+    pub events: Option<Vec<FineTuneEvent>>,
     pub fine_tuned_model: Option<String>,
-    pub hyperparams: Hyperparams,
-    pub organization_id: String,
+    pub hyperparams: Option<Hyperparams>,
+    pub organization_id: Option<String>,
     pub result_files: Vec<File>,
     pub status: String,
     pub validation_files: Vec<File>,
@@ -31,19 +35,30 @@ pub struct FineTune {
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
 pub struct Hyperparams {
-    pub batch_size: u64,
-    pub learning_rate_multiplier: f64,
+    #[serde(default)]
+    pub batch_size: Option<u64>,
+    #[serde(default)]
+    pub learning_rate_multiplier: Option<f64>,
     pub n_epochs: u64,
     pub prompt_loss_weight: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
-pub struct Event {
+pub struct FineTuneEvent {
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
     pub level: String,
     pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct FineTuneEventStreamBody {
+    data: Vec<FineTuneEvent>,
+}
+
+pub struct FineTuneEventStream {
+    inner: OpenAiStream<FineTuneEventStreamBody>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -79,9 +94,58 @@ impl FineTune {
         return Self::builder(training_file.as_ref()).build(client).await;
     }
 
+    pub async fn retreive(id: impl AsRef<str>, client: impl AsRef<Client>) -> Result<Self> {
+        let ft = client
+            .as_ref()
+            .get(format!(
+                "https://api.openai.com/v1/fine-tunes/{}",
+                id.as_ref()
+            ))
+            .send()
+            .await?
+            .json::<FallibleResponse<Self>>()
+            .await?
+            .into_result()?;
+
+        return Ok(ft);
+    }
+
     #[inline]
     pub fn builder<'a>(training_file: impl Into<Str<'a>>) -> Builder<'a> {
         return Builder::new(training_file);
+    }
+}
+
+impl FineTune {
+    #[inline]
+    pub fn fine_tuned_model(&self) -> Result<&str> {
+        return self
+            .fine_tuned_model
+            .as_deref()
+            .ok_or_else(|| Error::msg("Fine tuned model not found"));
+    }
+
+    #[inline]
+    pub async fn cancel(self, client: impl AsRef<Client>) -> Result<Self> {
+        return cancel_fine_tune(self.id, client).await;
+    }
+
+    #[inline]
+    pub async fn events(&self, client: impl AsRef<Client>) -> Result<Vec<FineTuneEvent>> {
+        return fine_tune_events(&self.id, client).await;
+    }
+
+    #[inline]
+    pub async fn event_stream(&self, client: impl AsRef<Client>) -> Result<FineTuneEventStream> {
+        return fine_tune_event_stream(&self.id, client).await;
+    }
+
+    #[inline]
+    pub async fn delete_model(self, client: impl AsRef<Client>) -> Option<Result<Delete>> {
+        return match self.fine_tuned_model {
+            Some(ftm) => Some(delete_fine_tune(ftm, client).await),
+            None => None,
+        };
     }
 }
 
@@ -220,6 +284,109 @@ impl<'a> Builder<'a> {
 
         return Ok(finetune);
     }
+}
+
+impl Stream for FineTuneEventStream {
+    type Item = Result<Vec<FineTuneEvent>>;
+
+    #[inline]
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        return match ready!(self.inner.try_poll_next_unpin(cx)) {
+            Some(Ok(x)) => std::task::Poll::Ready(Some(Ok(x.data))),
+            Some(Err(e)) => std::task::Poll::Ready(Some(Err(e))),
+            None => std::task::Poll::Ready(None),
+        };
+    }
+}
+
+async fn fine_tune_events_inner(
+    id: impl AsRef<str>,
+    stream: bool,
+    client: impl AsRef<Client>,
+) -> Result<reqwest::Response> {
+    let resp = client
+        .as_ref()
+        .get(format!(
+            "https://api.openai.com/v1/fine-tunes/{}/events",
+            id.as_ref()
+        ))
+        .query(&serde_json::json!({ "stream": stream }))
+        .send()
+        .await?;
+    return Ok(resp);
+}
+
+pub async fn fine_tune_events(
+    id: impl AsRef<str>,
+    client: impl AsRef<Client>,
+) -> Result<Vec<FineTuneEvent>> {
+    #[derive(Debug, Deserialize)]
+    struct Response {
+        data: Vec<FineTuneEvent>,
+    }
+
+    let resp = fine_tune_events_inner(id, false, client)
+        .await?
+        .json::<FallibleResponse<Response>>()
+        .await?
+        .into_result()?
+        .data;
+
+    return Ok(resp);
+}
+
+pub async fn fine_tune_event_stream(
+    id: impl AsRef<str>,
+    client: impl AsRef<Client>,
+) -> Result<FineTuneEventStream> {
+    let stream = fine_tune_events_inner(id, false, client)
+        .await?
+        .bytes_stream();
+
+    return Ok(FineTuneEventStream {
+        inner: OpenAiStream {
+            inner: Box::pin(stream),
+            _phtm: PhantomData,
+        },
+    });
+}
+
+pub async fn cancel_fine_tune(id: impl AsRef<str>, client: impl AsRef<Client>) -> Result<FineTune> {
+    let ft = client
+        .as_ref()
+        .post(format!(
+            "https://api.openai.com/v1/fine-tunes/{}/cancel",
+            id.as_ref()
+        ))
+        .send()
+        .await?
+        .json::<FallibleResponse<FineTune>>()
+        .await?
+        .into_result()?;
+
+    return Ok(ft);
+}
+
+pub async fn delete_fine_tune(
+    model_id: impl AsRef<str>,
+    client: impl AsRef<Client>,
+) -> Result<Delete> {
+    let del = client
+        .as_ref()
+        .delete(format!(
+            "https://api.openai.com/v1/models/{}",
+            model_id.as_ref()
+        ))
+        .send()
+        .await?
+        .json::<FallibleResponse<Delete>>()
+        .await?
+        .into_result()?;
+
+    return Ok(del);
 }
 
 pub async fn fine_tunes(client: impl AsRef<Client>) -> Result<Vec<FineTune>> {

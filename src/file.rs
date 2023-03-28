@@ -1,4 +1,5 @@
 use crate::{
+    common::Delete,
     error::{FallibleResponse, Result},
     Client, Str,
 };
@@ -12,10 +13,24 @@ use reqwest::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::VecDeque, ffi::OsStr, future::ready, marker::PhantomData, path::Path, pin::Pin,
+    collections::VecDeque,
+    ffi::OsStr,
+    future::ready,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    ops::{Deref, DerefMut},
+    path::Path,
+    pin::Pin,
     task::Poll,
 };
 use tokio_util::io::ReaderStream;
+
+#[derive(Debug)]
+pub struct TemporaryFile {
+    inner: File,
+    client: Client,
+    deleting: bool,
+}
 
 /// Files are used to upload documents that can be used with features like **Fine-tuning**.
 #[derive(Debug, Clone, Deserialize)]
@@ -27,14 +42,6 @@ pub struct File {
     pub created_at: DateTime<Utc>,
     pub filename: String,
     pub purpose: String,
-}
-
-/// Result of deleting a file
-#[derive(Debug, Clone, Deserialize)]
-#[non_exhaustive]
-pub struct Delete {
-    pub id: String,
-    pub deleted: bool,
 }
 
 pin_project_lite::pin_project! {
@@ -222,6 +229,53 @@ impl<S: Stream<Item = reqwest::Result<Bytes>>, T: DeserializeOwned> Stream for C
                 Some(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
                 None => return Poll::Ready(None),
             }
+        }
+    }
+}
+
+impl TemporaryFile {
+    #[inline]
+    pub fn new(inner: File, client: Client) -> Self {
+        return Self {
+            inner,
+            client,
+            deleting: false,
+        };
+    }
+
+    #[inline]
+    pub fn into_inner(self) -> File {
+        let mut this = ManuallyDrop::new(self);
+        unsafe {
+            let inner = core::ptr::read(&this.inner);
+            core::ptr::drop_in_place(&mut this.client);
+            return inner;
+        }
+    }
+}
+
+impl Deref for TemporaryFile {
+    type Target = File;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for TemporaryFile {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl Drop for TemporaryFile {
+    #[inline]
+    fn drop(&mut self) {
+        if !self.deleting {
+            self.deleting = true;
+            tokio::spawn(delete_file(self.id.clone(), self.client.clone()));
         }
     }
 }

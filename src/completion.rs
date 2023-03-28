@@ -3,15 +3,12 @@ use super::{
     error::{BuilderError, Result},
     Str,
 };
-use crate::{
-    error::{Error, FallibleResponse, OpenAiError},
-    trim_ascii_start, Client,
-};
+use crate::{error::FallibleResponse, Client, OpenAiStream};
 use chrono::{DateTime, Utc};
-use futures::{future::ready, ready, Stream, TryStreamExt};
+use futures::{future::ready, Stream, TryStreamExt};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, ops::RangeInclusive, pin::Pin};
+use std::{borrow::Cow, collections::HashMap, marker::PhantomData, ops::RangeInclusive};
 
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
@@ -48,9 +45,7 @@ pub struct Completion {
 }
 
 /// Given a prompt, the model will return one or more predicted completions, and can also return the probabilities of alternative tokens at each position.
-pub struct CompletionStream {
-    inner: Pin<Box<dyn Stream<Item = reqwest::Result<bytes::Bytes>>>>,
-}
+pub type CompletionStream = OpenAiStream<Completion>;
 
 /// [`Completion`]/[`CompletionStream`] request builder
 #[derive(Debug, Clone, Serialize)]
@@ -92,11 +87,10 @@ impl Completion {
     #[inline]
     pub async fn new(
         model: impl AsRef<str>,
-        prompt: impl Into<String>,
+        prompt: impl AsRef<str>,
         client: impl AsRef<Client>,
     ) -> Result<Self> {
-        return Self::builder(model.as_ref())
-            .prompt([prompt.into()].as_slice())
+        return Self::builder(model.as_ref(), prompt.as_ref())
             .build(client)
             .await;
     }
@@ -105,7 +99,7 @@ impl Completion {
     #[inline]
     pub async fn new_stream(
         model: impl AsRef<str>,
-        prompt: impl Into<String>,
+        prompt: impl AsRef<str>,
         client: impl AsRef<Client>,
     ) -> Result<CompletionStream> {
         return CompletionStream::new(model, prompt, client).await;
@@ -113,7 +107,16 @@ impl Completion {
 
     /// Creates a completion request builder
     #[inline]
-    pub fn builder<'a>(model: impl Into<Str<'a>>) -> CompletionBuilder<'a> {
+    pub fn builder<'a>(
+        model: impl Into<Str<'a>>,
+        prompt: impl Into<Str<'a>>,
+    ) -> CompletionBuilder<'a> {
+        return CompletionBuilder::new(model).prompt([prompt]);
+    }
+
+    /// Creates a completion request builder
+    #[inline]
+    pub fn raw_builder<'a>(model: impl Into<Str<'a>>) -> CompletionBuilder<'a> {
         return CompletionBuilder::new(model);
     }
 }
@@ -354,11 +357,10 @@ impl CompletionStream {
     #[inline]
     pub async fn new(
         model: impl AsRef<str>,
-        prompt: impl Into<String>,
+        prompt: impl AsRef<str>,
         client: impl AsRef<Client>,
     ) -> Result<CompletionStream> {
-        return Completion::builder(model.as_ref())
-            .prompt([prompt.into()].as_slice())
+        return Completion::builder(model.as_ref(), prompt.as_ref())
             .build_stream(client)
             .await;
     }
@@ -367,6 +369,7 @@ impl CompletionStream {
     fn create(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
+            _phtm: PhantomData,
         };
     }
 }
@@ -382,42 +385,5 @@ impl CompletionStream {
         return self
             .try_filter_map(|x| ready(Ok(x.choices.into_iter().next())))
             .map_ok(|x| x.text);
-    }
-}
-
-impl Stream for CompletionStream {
-    type Item = Result<Completion>;
-
-    #[inline]
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        const DONE: &[u8] = b"[DONE]";
-
-        #[derive(Debug, Deserialize)]
-        struct ChunkError {
-            error: OpenAiError,
-        }
-
-        match ready!(self.inner.as_mut().poll_next(cx)) {
-            Some(Ok(x)) => {
-                // Check if chunk is error
-                if let Ok(ChunkError { error }) = serde_json::from_slice::<ChunkError>(&x) {
-                    return std::task::Poll::Ready(Some(Err(Error::from(error))));
-                }
-
-                // remove initial "data"
-                let x: &[u8] = trim_ascii_start(&x[5..]);
-                if x.starts_with(DONE) {
-                    return std::task::Poll::Ready(None);
-                }
-
-                let json = serde_json::from_slice::<Completion>(x)?;
-                return std::task::Poll::Ready(Some(Ok(json)));
-            }
-            Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),
-            None => return std::task::Poll::Ready(None),
-        }
     }
 }

@@ -28,6 +28,38 @@ impl TrainingData {
     pub fn builder() -> TrainingDataBuilder {
         TrainingDataBuilder::new()
     }
+
+    pub async fn save_iter<I>(data: I, client: impl AsRef<Client>) -> Result<File>
+    where
+        I: IntoIterator<Item = Self>,
+        I::IntoIter: 'static + Send + Sync,
+    {
+        return Self::builder().save_iter(data, client).await;
+    }
+
+    pub async fn try_save_iter<I, E>(data: I, client: impl AsRef<Client>) -> Result<File>
+    where
+        I: IntoIterator<Item = Result<Self, E>>,
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+        I::IntoIter: 'static + Send + Sync,
+    {
+        return Self::builder().try_save_iter(data, client).await;
+    }
+
+    pub async fn save_stream<S>(data: S, client: impl AsRef<Client>) -> Result<File>
+    where
+        S: 'static + Send + Sync + Stream<Item = TrainingData>,
+    {
+        return Self::builder().save_stream(data, client).await;
+    }
+
+    pub async fn try_save_stream<S>(self, data: S, client: impl AsRef<Client>) -> Result<File>
+    where
+        S: 'static + Send + Sync + TryStream<Ok = TrainingData>,
+        S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        return Self::builder().try_save_stream(data, client).await;
+    }
 }
 
 impl TrainingDataBuilder {

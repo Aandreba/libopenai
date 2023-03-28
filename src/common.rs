@@ -9,3 +9,12 @@ pub struct Usage {
     pub completion_tokens: u64,
     pub total_tokens: u64,
 }
+
+/// Result of deleting a file
+#[derive(Debug, Clone, Deserialize)]
+#[non_exhaustive]
+pub struct Delete {
+    pub id: String,
+    pub object: String,
+    pub deleted: bool,
+}
