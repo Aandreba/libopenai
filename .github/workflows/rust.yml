@@ -23,7 +23,7 @@ jobs:
     check:
         runs-on: ubuntu-latest
         steps:
-            - user: actions/checkout@v3
+            - uses: actions/checkout@v3
             - name: Check
             - run: cargo check --verbose
             - run: cargo check --verbose --all-features
