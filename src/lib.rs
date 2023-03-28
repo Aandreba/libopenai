@@ -1,4 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![doc = include_str!("../README.md")]
 
 use crate::error::OpenAiError;
 use bytes::Bytes;
@@ -47,6 +48,8 @@ pub mod moderations;
 pub mod prelude {
     use super::*;
 
+    pub use super::Client;
+
     pub use audio::transcription::TranscriptionBuilder;
     pub use audio::translation::TranslationBuilder;
 
@@ -60,7 +63,7 @@ pub mod prelude {
 
     pub use embeddings::{Embedding, EmbeddingResult};
 
-    pub use error::Error;
+    pub use error::{Error, Result};
 
     pub use file::File;
 
