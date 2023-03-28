@@ -1,7 +1,7 @@
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Aandreba/libopenai/rust.yml)
-![GitHub](https://img.shields.io/github/license/Aandreba/libopenai)
-![Crates.io](https://img.shields.io/crates/v/libopenai)
-![docs.rs](https://img.shields.io/docsrs/libopenai)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Aandreba/libopenai/rust.yml)](https://github.com/Aandreba/libopenai)
+[![GitHub](https://img.shields.io/github/license/Aandreba/libopenai)](https://github.com/Aandreba/libopenai/blob/master/LICENSE.md)
+[![Crates.io](https://img.shields.io/crates/v/libopenai)](https://crates.io/crates/libopenai)
+[![docs.rs](https://img.shields.io/docsrs/libopenai)](https://docs.rs/libopenai/latest/libopenai)
 
 ## libopenai - Rust client to interact with OpenAI's API
 
