@@ -2,3 +2,4 @@
 /img
 /media
 .env
+Cargo.lock

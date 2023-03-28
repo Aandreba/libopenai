@@ -1,7 +1,7 @@
 [package]
 name = "libopenai"
 description = "A Rust client for OpenAI's API"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Alex Andreba <aandrebafreelancer@gmail.com>"]
 keywords = ["chatgpt", "openai", "ai"]
@@ -13,6 +13,7 @@ categories = [
     "text-processing",
 ]
 repository = "https://github.com/Aandreba/libopenai"
+license = "Apache"
 license-file = "LICENSE.md"
 exclude = [".github", "examples", "media", "Makefile"]
 
@@ -37,7 +38,7 @@ rand = "0.8.5"
 reqwest = { version = "0.11.14", features = ["json", "stream", "multipart"] }
 serde = { version = "1.0.155", features = ["derive", "rc"] }
 serde_json = "1.0.94"
-srtlib = "0.1.3"
+srtlib = "0.1.5"
 thiserror = "1.0.39"
 tokio = { version = "1.25.0", features = ["full"] }
 tokio-util = "0.7.7"
