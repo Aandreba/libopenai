@@ -13,7 +13,7 @@ use reqwest::{
 use std::{borrow::Cow, ffi::OsStr, ops::RangeInclusive, path::Path};
 use tokio_util::io::ReaderStream;
 
-/// Translates audio into into English.
+/// Translates audio into English.
 #[derive(Debug, Clone)]
 pub struct TranslationBuilder {
     prompt: Option<String>,

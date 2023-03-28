@@ -6,7 +6,7 @@ use std::time::Duration;
 
 /// Transcribes audio into the input language.
 pub mod transcription;
-/// Translates audio into into English.
+/// Translates audio into English.
 pub mod translation;
 
 /// The format of the transcript/translation output.
@@ -30,6 +30,7 @@ pub enum AudioResponse {
     Text(String),
     Srt(Vec<Subtitle>),
     VerboseJson(VerboseJsonResponse),
+    // Vtt
 }
 
 /// A generic segment, independent of [response format](AudioResponseFormat)
