@@ -222,13 +222,8 @@ impl<T: DeserializeOwned> Stream for OpenAiStream<T> {
                 return std::task::Poll::Ready(None);
             }
 
-            let json = serde_json::from_slice::<T>(line);
-            if let Err(ref json) = json {
-                tracing::error!("{json}");
-                tracing::info!("{:?}", core::str::from_utf8(line).unwrap());
-            }
-
-            return std::task::Poll::Ready(Some(Ok(json?)));
+            let json = serde_json::from_slice::<T>(line)?;
+            return std::task::Poll::Ready(Some(Ok(json)));
         }
     }
 }
