@@ -46,7 +46,13 @@ async fn main() -> Result<()> {
 
 ## Features
 
--   Support for completions (regular & chat)
+-   Text generation
+    -   [Regular completion](https://docs.rs/libopenai/latest/libopenai/completion)
+    -   [Chat completion](https://docs.rs/libopenai/latest/libopenai/chat)
+    -   [Edit](https://docs.rs/libopenai/latest/libopenai/edit)
+-   [Embeddings](https://docs.rs/libopenai/latest/libopenai/embeddings)
+-   [Moderations](https://docs.rs/libopenai/latest/libopenai/moderations)
+-   [Files](https://docs.rs/libopenai/latest/libopenai/file) and [fine-tuning](https://docs.rs/libopenai/latest/libopenai/finetune)
 -   [Image generation](https://docs.rs/libopenai/latest/libopenai/image) with automatic conversion to desired formats
 -   [Audio-to-text](https://docs.rs/libopenai/latest/libopenai/audio) conversions
 -   Support for streaming
