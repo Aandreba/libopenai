@@ -14,7 +14,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-            - name: Build
             - run: cargo build --verbose
             - run: cargo build --verbose --all-features
             - run: cargo build --verbose --tests
@@ -24,7 +23,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
-            - name: Check
             - run: cargo check --verbose
             - run: cargo check --verbose --all-features
             - run: cargo check --verbose --tests
