@@ -10,7 +10,6 @@ use serde::{
     Deserialize, Deserializer,
 };
 use std::{
-    backtrace::Backtrace,
     borrow::Cow,
     marker::PhantomData,
     ops::{Deref, DerefMut},

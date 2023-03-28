@@ -5,7 +5,8 @@ use super::{
 };
 use crate::{error::FallibleResponse, Client, OpenAiStream};
 use chrono::{DateTime, Utc};
-use futures::{future::ready, Stream, TryStreamExt};
+use futures::{channel::mpsc::unbounded, StreamExt};
+use futures::{channel::mpsc::UnboundedSender, future::ready, Stream, TryStreamExt};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, marker::PhantomData, ops::RangeInclusive};
@@ -376,6 +377,32 @@ impl CompletionStream {
 }
 
 impl CompletionStream {
+    pub fn completions(self) -> impl Stream<Item = Result<impl Stream<Item = Choice>>> {
+        let mut this = self.into_choice_stream();
+        tokio::spawn(async move {
+            let mut choices = HashMap::<u64, UnboundedSender<Choice>>::new();
+            while let Some(choice) = this.next().await {
+                if let Ok(choice) = choice {
+                    match choices.entry(choice.index) {
+                        std::collections::hash_map::Entry::Occupied(mut entry) => {
+                            let _ = entry.get_mut().unbounded_send(choice);
+                            return ready(Ok(None));
+                        }
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            let (send, recv) = unbounded();
+                            let _ = send.unbounded_send(choice);
+                            entry.insert(send);
+                            return ready(Ok(Some(recv)));
+                        }
+                    }
+                }
+            }
+            todo!()
+        });
+
+        return this;
+    }
+
     /// Converts [`Stream<Item = Result<Completion>>`] into [`Stream<Item = Result<Choice>>`]
     pub fn into_choice_stream(self) -> impl Stream<Item = Result<Choice>> {
         return self.try_filter_map(|x| ready(Ok(x.choices.into_iter().next())));

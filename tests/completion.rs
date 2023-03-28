@@ -1,4 +1,4 @@
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use libopenai::{
     error::Result,
     file::TemporaryFile,
@@ -24,23 +24,28 @@ async fn basic() -> Result<()> {
     return Ok(());
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[tokio::test]
 async fn stream() -> Result<()> {
     dotenv::dotenv().unwrap();
     tracing_subscriber::fmt::init();
     let client = Client::new(None, None)?;
 
     let mut stream = Completion::builder(
-        "text-ada-001",
+        "text-davinci-003",
         "Whats' the best way to calculate a factorial?",
     )
+    .n(2)
     .max_tokens(256)
     .build_stream(&client)
+    .await?
+    .completions()
+    .try_for_each(|mut entry| async move {
+        while let Some(entry) = entry.next().await {
+            println!("{:?}", entry.text);
+        }
+        return Ok(());
+    })
     .await?;
-
-    while let Some(entry) = stream.try_next().await? {
-        println!("{entry:#?}");
-    }
 
     return Ok(());
 }
