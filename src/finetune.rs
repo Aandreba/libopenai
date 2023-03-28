@@ -6,7 +6,6 @@ use crate::{
     Client, OpenAiStream, Str,
 };
 use chrono::{DateTime, Utc};
-use futures::{ready, Stream, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
@@ -52,14 +51,7 @@ pub struct FineTuneEvent {
     pub message: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct FineTuneEventStreamBody {
-    data: Vec<FineTuneEvent>,
-}
-
-pub struct FineTuneEventStream {
-    inner: OpenAiStream<FineTuneEventStreamBody>,
-}
+pub type FineTuneEventStream = OpenAiStream<FineTuneEvent>;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Builder<'a> {
@@ -286,22 +278,6 @@ impl<'a> Builder<'a> {
     }
 }
 
-impl Stream for FineTuneEventStream {
-    type Item = Result<Vec<FineTuneEvent>>;
-
-    #[inline]
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        return match ready!(self.inner.try_poll_next_unpin(cx)) {
-            Some(Ok(x)) => std::task::Poll::Ready(Some(Ok(x.data))),
-            Some(Err(e)) => std::task::Poll::Ready(Some(Err(e))),
-            None => std::task::Poll::Ready(None),
-        };
-    }
-}
-
 async fn fine_tune_events_inner(
     id: impl AsRef<str>,
     stream: bool,
@@ -342,15 +318,14 @@ pub async fn fine_tune_event_stream(
     id: impl AsRef<str>,
     client: impl AsRef<Client>,
 ) -> Result<FineTuneEventStream> {
-    let stream = fine_tune_events_inner(id, false, client)
+    let stream = fine_tune_events_inner(id, true, client)
         .await?
         .bytes_stream();
 
     return Ok(FineTuneEventStream {
-        inner: OpenAiStream {
-            inner: Box::pin(stream),
-            _phtm: PhantomData,
-        },
+        inner: Box::pin(stream),
+        current_line: None,
+        _phtm: PhantomData,
     });
 }
 

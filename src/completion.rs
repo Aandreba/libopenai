@@ -330,12 +330,18 @@ impl<'a> CompletionBuilder<'a> {
             .post("https://api.openai.com/v1/completions")
             .json(&self)
             .send()
-            .await?
-            .json::<FallibleResponse<Completion>>()
-            .await?
-            .into_result()?;
+            .await?;
 
-        return Ok(resp);
+        let text = resp.text().await?;
+        println!("{text}");
+
+        let json = serde_json::from_str(&text)?;
+        return Ok(json);
+
+        // .json::<FallibleResponse<Completion>>()
+        // .await?
+        // .into_result()?;
+        // return Ok(resp);
     }
 
     /// Sends the request as a stream request
@@ -369,6 +375,7 @@ impl CompletionStream {
     fn create(resp: Response) -> Self {
         return Self {
             inner: Box::pin(resp.bytes_stream()),
+            current_line: None,
             _phtm: PhantomData,
         };
     }

@@ -1,5 +1,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+use crate::error::OpenAiError;
 use bytes::Bytes;
 use error::{Error, Result};
 use futures::{ready, Stream};
@@ -9,14 +10,13 @@ use serde::{
     Deserialize, Deserializer,
 };
 use std::{
+    backtrace::Backtrace,
     borrow::Cow,
     marker::PhantomData,
     ops::{Deref, DerefMut},
     pin::Pin,
     time::Duration,
 };
-
-use crate::error::OpenAiError;
 
 pub(crate) type Str<'a> = Cow<'a, str>;
 
@@ -148,6 +148,7 @@ pin_project_lite::pin_project! {
     pub struct OpenAiStream<T> {
         #[pin]
         inner: Pin<Box<dyn 'static + Stream<Item = reqwest::Result<Bytes>> + Send + Sync>>,
+        current_line: Option<Bytes>,
         _phtm: PhantomData<T>,
     }
 }
@@ -155,7 +156,6 @@ pin_project_lite::pin_project! {
 impl<T: DeserializeOwned> Stream for OpenAiStream<T> {
     type Item = Result<T>;
 
-    #[inline]
     fn poll_next(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -167,32 +167,73 @@ impl<T: DeserializeOwned> Stream for OpenAiStream<T> {
             error: OpenAiError,
         }
 
-        match ready!(self.inner.as_mut().poll_next(cx)) {
-            Some(Ok(x)) => {
-                // Check if chunk is error
-                if let Ok(ChunkError { error }) = serde_json::from_slice::<ChunkError>(&x) {
-                    return std::task::Poll::Ready(Some(Err(Error::from(error))));
+        fn process_line(current: &mut Bytes) -> Bytes {
+            let mut idx = None;
+            for (i, b) in current.windows(2).enumerate() {
+                match b {
+                    b"\n\n" => {
+                        idx = Some(i);
+                        break;
+                    }
+                    _ => {}
                 }
-
-                // remove initial "data"
-                let x: &[u8] = trim_ascii_start(&x[5..]);
-                if x.starts_with(DONE) {
-                    return std::task::Poll::Ready(None);
-                }
-
-                println!("{}", core::str::from_utf8(x).unwrap());
-
-                let json = serde_json::from_slice::<T>(x)?;
-                return std::task::Poll::Ready(Some(Ok(json)));
             }
-            Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),
-            None => return std::task::Poll::Ready(None),
+
+            let split = current.split_off(idx.unwrap_or(current.len())).slice(2..);
+            core::mem::replace(current, split)
+        }
+
+        loop {
+            let line = match self.current_line {
+                Some(ref mut current) => {
+                    let next = process_line(current);
+                    if current.is_empty() {
+                        self.current_line = None
+                    }
+                    next
+                }
+                None => match ready!(self.inner.as_mut().poll_next(cx)) {
+                    Some(Ok(mut x)) => {
+                        let next = process_line(&mut x);
+                        self.current_line = match x.is_empty() {
+                            true => None,
+                            false => Some(x),
+                        };
+                        next
+                    }
+                    Some(Err(e)) => return std::task::Poll::Ready(Some(Err(e.into()))),
+                    None => return std::task::Poll::Ready(None),
+                },
+            };
+
+            let line = trim_ascii(&line);
+            if line.is_empty() {
+                continue;
+            }
+
+            // Check if chunk is error
+            if let Ok(ChunkError { error }) = serde_json::from_slice::<ChunkError>(&line) {
+                return std::task::Poll::Ready(Some(Err(Error::from(error))));
+            }
+
+            // remove initial "data"
+            let line: &[u8] = trim_ascii_start(&line[5..]);
+            if line.starts_with(DONE) {
+                return std::task::Poll::Ready(None);
+            }
+
+            let json = serde_json::from_slice::<T>(line);
+            if let Err(ref json) = json {
+                tracing::error!("{json}");
+                tracing::info!("{:?}", core::str::from_utf8(line).unwrap());
+            }
+
+            return std::task::Poll::Ready(Some(Ok(json?)));
         }
     }
 }
 
 #[inline]
-#[allow(unused)]
 pub(crate) fn trim_ascii(ascii: &[u8]) -> &[u8] {
     return trim_ascii_end(trim_ascii_start(ascii));
 }
