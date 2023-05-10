@@ -5,7 +5,7 @@
 
 ## libopenai - Rust client to interact with OpenAI's API
 
-Rust client for OpenAI's [API](https://platform.openai.com/docs/api-reference), written with [tokio](https://github.com/tokio-rs/tokio) and [reqwest](https://github.com/seanmonstar/reqwest)
+Unofficial Rust client for OpenAI's [API](https://platform.openai.com/docs/api-reference), writen with [tokio](https://github.com/tokio-rs/tokio) and [reqwest](https://github.com/seanmonstar/reqwest)
 
 ## How to use
 
